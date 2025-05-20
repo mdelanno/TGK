@@ -4,7 +4,7 @@ TGK is the acronym for **Tiny Geometric Kernel**. It is a Boundary Representatio
 
 A viewer based on WPF/DirectX is included.
 
-![A screenshot of the viewer](https://raw.githubusercontent.com/philippe-lehmann/tgk/master/doc/img/screenshot.png)
+![A screenshot of the viewer](https://github.com/mdelanno/TGK/blob/master/ViewerScreenshot.png?raw=true)
 
 Similar to [OpenCascade](https://github.com/Open-Cascade-SAS/OCCT), but much smaller and simpler.
 
