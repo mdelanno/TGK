@@ -1,6 +1,3 @@
 ﻿namespace TGK.Geometry;
 
-public class Curve
-{
-    
-}
+public abstract class Curve;

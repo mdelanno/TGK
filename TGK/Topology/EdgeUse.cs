@@ -1,6 +1,6 @@
-﻿namespace TGK.Geometry;
+﻿namespace TGK.Topology;
 
-public class EdgeUse
+public sealed class EdgeUse
 {
     public Face Face { get; }
 

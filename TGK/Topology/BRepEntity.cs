@@ -1,4 +1,4 @@
-namespace TGK.Geometry;
+namespace TGK.Topology;
 
 public abstract class BRepEntity
 {

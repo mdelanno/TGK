@@ -1,6 +1,6 @@
-﻿using TGK.Topology;
+﻿using TGK.Geometry;
 
-namespace TGK.Geometry;
+namespace TGK.Topology;
 
 public sealed class Vertex : BRepEntity
 {
@@ -10,7 +10,7 @@ public sealed class Vertex : BRepEntity
 
     public IReadOnlySet<Edge> Edges { get; }
 
-    internal Vertex(Xyz position, int id) : base(id)
+    internal Vertex(int id, Xyz position) : base(id)
     {
         Edges = new ReadOnlySet<Edge>(_edges);
 

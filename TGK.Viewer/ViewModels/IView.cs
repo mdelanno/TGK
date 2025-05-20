@@ -1,6 +1,10 @@
 namespace TGK.Viewer.ViewModels;
 
-interface IView
+public interface IView
 {
+    double ViewportHeight { get; }
+
+    double ViewportWidth { get; }
+
     void ZoomExtents();
 }

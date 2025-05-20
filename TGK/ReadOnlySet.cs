@@ -1,6 +1,6 @@
 ﻿using System.Collections;
 
-namespace ProfilMaker;
+namespace TGK;
 
 public sealed class ReadOnlySet<T> : IReadOnlySet<T>
 {

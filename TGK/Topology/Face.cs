@@ -1,13 +1,23 @@
-﻿namespace TGK.Geometry;
+﻿using TGK.Geometry;
+
+namespace TGK.Topology;
 
 public sealed class Face : BRepEntity
 {
     readonly List<EdgeUse> _edgeUses = [];
 
+    public Surface Surface { get; }
+
     public IReadOnlyList<EdgeUse> EdgeUses { get; }
 
-    public Face(int id) : base(id)
+    public bool SameSenseAsSurface { get; set; }
+
+    public Face(int id, Surface surface, bool sameSenseAsSurface = true) : base(id)
     {
+        ArgumentNullException.ThrowIfNull(surface);
+
+        Surface = surface;
+        SameSenseAsSurface = sameSenseAsSurface;
         EdgeUses = _edgeUses.AsReadOnly();
     }
 
@@ -33,5 +43,10 @@ public sealed class Face : BRepEntity
     public override string ToString()
     {
         return $"f{Id}: {string.Join(", ", EdgeUses.Select(eu => eu.StartVertex))}";
+    }
+
+    internal void ReverseEdgeUsesInternal()
+    {
+        _edgeUses.Reverse();
     }
 }

@@ -1,6 +1,3 @@
 ﻿namespace TGK.Geometry;
 
-public class Surface
-{
-    
-}
+public abstract class Surface;

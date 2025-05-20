@@ -23,7 +23,6 @@
                 <MenuItem Header="_Cylinder" Command="{Binding CreateCylinderCommand}" />
                 <MenuItem Header="C_one" Command="{Binding CreateConeCommand}" />
                 <MenuItem Header="_Torus" Command="{Binding CreateTorusCommand}" />
-                <MenuItem Header="_Helix" Command="{Binding CreateHelixCommand}" />
             </MenuItem>
             <MenuItem Header="_View">
                 <MenuItem Header="Show _vertices" IsCheckable="True" IsChecked="{Binding ShowVertices}"/>
