@@ -106,6 +106,18 @@ public sealed class MainViewModel : ObservableObject
 
     public Camera Camera { get; }
 
+    public double Zoom
+    {
+        get
+        {
+            if (Camera is OrthographicCamera orthographicCamera)
+                return _view.ViewportWidth / orthographicCamera.Width;
+            return double.NaN;
+        }
+    }
+
+    public RelayCommand Zoom1_1Command { get; }
+
     public MainViewModel(IView view)
     {
         ArgumentNullException.ThrowIfNull(view);
@@ -126,9 +138,19 @@ public sealed class MainViewModel : ObservableObject
         CreateCylinderCommand = new RelayCommand(CreateCylinder);
         CreateConeCommand = new RelayCommand(CreateCone);
         CreateTorusCommand = new RelayCommand(CreateTorus);
+
+        Zoom1_1Command = new RelayCommand(Zoom1_1);
     }
 
-    static OrthographicCamera InitializeCamera()
+    void Zoom1_1()
+    {
+        if (Camera is OrthographicCamera orthographicCamera)
+            orthographicCamera.Width = _view.ViewportWidth;
+        else
+            throw new InvalidOperationException("Can not set zoom for non-orthographic camera.");
+    }
+
+    OrthographicCamera InitializeCamera()
     {
         var lookDirection = new Vector3D(-1, -1, -1);
         lookDirection.Normalize();
@@ -138,9 +160,15 @@ public sealed class MainViewModel : ObservableObject
             LookDirection = lookDirection,
             UpDirection = new Vector3D(0, 0, 1),
             NearPlaneDistance = -1000,
-            FarPlaneDistance = 1000,
+            FarPlaneDistance = 1000
         };
+        camera.Changed += CameraOnChanged;
         return camera;
+    }
+
+    void CameraOnChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(Zoom));
     }
 
     void CreateVertex()

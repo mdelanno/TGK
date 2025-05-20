@@ -11,6 +11,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition />
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <Menu>
             <MenuItem Header="_Primitives">
@@ -25,6 +26,8 @@
                 <MenuItem Header="_Torus" Command="{Binding CreateTorusCommand}" />
             </MenuItem>
             <MenuItem Header="_View">
+                <MenuItem Header="_Zoom 1:1" Command="{Binding Zoom1_1Command}"/>
+                <Separator />
                 <MenuItem Header="Show _vertices" IsCheckable="True" IsChecked="{Binding ShowVertices}"/>
                 <MenuItem Header="Show _edges" IsCheckable="True" IsChecked="{Binding ShowEdges}"/>
                 <MenuItem Header="Show _faces" IsCheckable="True" IsChecked="{Binding ShowFaces}"/>
@@ -36,7 +39,7 @@
         <hx:Viewport3DX x:Name="viewport3Dx" Grid.Row="1" Orthographic="True" ZoomAroundMouseDownPoint="True" MSAA="Maximum" ModelUpDirection="0 0 1"
                         ViewCubeVerticalPosition="0.8" IsViewCubeMoverEnabled="False"
                         EffectsManager="{Binding EffectsManager}" ShowCoordinateSystem="True"
-                        Camera="{Binding Camera}" EnableDesignModeRendering="False">
+                        Camera="{Binding Camera}" EnableDesignModeRendering="False" ShowCameraInfo="True">
             <hx:Viewport3DX.InputBindings>
                 <MouseBinding Command="{x:Static hx:ViewportCommands.Rotate}" MouseAction="RightClick" />
                 <MouseBinding Command="{x:Static hx:ViewportCommands.Pan}" MouseAction="MiddleClick" />
@@ -44,5 +47,13 @@
             </hx:Viewport3DX.InputBindings>
             <hx:Element3DPresenter Content="{Binding RootSceneNode}" />
         </hx:Viewport3DX>
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Row="0" Grid.Column="0" Margin="5 5 2.5 5">Zoom:</TextBlock>
+            <TextBlock Grid.Row="0" Grid.Column="1" Margin="2.5 5" Text="{Binding Zoom, StringFormat={}{0:0.###}}"/>
+        </Grid>
     </Grid>
 </Window>
