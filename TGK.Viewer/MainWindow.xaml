@@ -27,6 +27,8 @@
             </MenuItem>
             <MenuItem Header="_Intersections">
                 <MenuItem Header="_Line / line" Command="{Binding LineLineIntersectionCommand}"/>
+                <Separator />
+                <MenuItem Header="_Line / plane" Command="{Binding LinePlaneIntersectionCommand}"/>
             </MenuItem>
             <MenuItem Header="_View">
                 <MenuItem Header="_Zoom 1:1" Command="{Binding Zoom1_1Command}"/>
@@ -34,6 +36,8 @@
                 <MenuItem Header="Show _vertices" IsCheckable="True" IsChecked="{Binding ShowVertices}"/>
                 <MenuItem Header="Show _edges" IsCheckable="True" IsChecked="{Binding ShowEdges}"/>
                 <MenuItem Header="Show _faces" IsCheckable="True" IsChecked="{Binding ShowFaces}"/>
+                <Separator />
+                <MenuItem Header="Show faces _normals" IsCheckable="True" IsChecked="{Binding ShowFaceNormals}"/>
                 <Separator />
                 <MenuItem Header="Show _isoparametric curves" IsCheckable="True" IsChecked="{Binding ShowIsoCurve}"/>
                 <MenuItem Header="Show _names" IsCheckable="True" IsChecked="{Binding ShowNames}"/>

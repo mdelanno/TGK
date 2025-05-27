@@ -1,4 +1,5 @@
-﻿using static System.Math;
+﻿using TGK.Geometry.Surfaces;
+using static System.Math;
 
 namespace TGK.Geometry.Curves;
 
@@ -51,5 +52,22 @@ public sealed class Circle : Curve
     public override double GetParameterAtPoint(Xyz point)
     {
         throw new NotImplementedException();
+    }
+
+    public override double GetDistanceTo(Xyz point)
+    {
+        return point.GetDistanceTo(Center) - Radius;
+    }
+
+    public Plane GetPlane()
+    {
+        return new Plane(Normal, Center);
+    }
+
+    public PointContainment Contains(Xyz point, double tolerance = 1e-10)
+    {
+        double distance = Center.GetDistanceTo(point);
+        if (Abs(distance - Radius) < tolerance) return PointContainment.OnBoundary;
+        return distance < Radius ? PointContainment.Inside : PointContainment.Outside;
     }
 }

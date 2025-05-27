@@ -35,10 +35,33 @@ public sealed class Line : Curve
         throw new NotImplementedException();
     }
 
+    public override double GetDistanceTo(Xyz point)
+    {
+        GetClosestPointTo(point, out double signedDistance);
+        return Math.Abs(signedDistance);
+    }
+
     public bool IsParallelTo(Line other)
     {
         ArgumentNullException.ThrowIfNull(other);
 
         return Direction.IsParallelTo(other.Direction);
+    }
+
+    public Xyz GetClosestPointTo(in Xyz point)
+    {
+        return GetClosestPointTo(point, out double _);
+    }
+
+    public Xyz GetClosestPointTo(in Xyz point, out double signedDistance)
+    {
+        Xyz v = Origin.GetVectorTo(point);
+        signedDistance = Direction.DotProduct(v);
+        return Origin + Direction * signedDistance;
+    }
+
+    public bool PassesThrough(in Xyz point)
+    {
+        return point.GetDistanceTo(GetClosestPointTo(point)) < Tolerance.Default.Point;
     }
 }

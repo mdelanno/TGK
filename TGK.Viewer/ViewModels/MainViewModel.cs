@@ -40,7 +40,9 @@ public sealed class MainViewModel : ObservableObject
 
     BillboardText3D? _modelSpaceLabel;
 
-    double _chordHeight = 0.3;
+    double _chordHeight = 0.1;
+
+    bool _showFaceNormals;
 
     public bool ShowVertices
     {
@@ -87,6 +89,15 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    public bool ShowFaceNormals
+    {
+        get => _showFaceNormals;
+        set
+        {
+            if (SetProperty(ref _showFaceNormals, value)) RefreshScene();
+        }
+    }
+
     public RelayCommand CreateVertexCommand { get; }
 
     public RelayCommand CreateEdgesCommand { get; }
@@ -104,6 +115,8 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand CreateTorusCommand { get; }
 
     public RelayCommand LineLineIntersectionCommand { get; }
+
+    public RelayCommand LinePlaneIntersectionCommand { get; }
 
     public EffectsManager EffectsManager { get; } = new DefaultEffectsManager();
 
@@ -157,6 +170,7 @@ public sealed class MainViewModel : ObservableObject
         CreateTorusCommand = new RelayCommand(CreateTorus);
 
         LineLineIntersectionCommand = new RelayCommand(LineLineIntersection);
+        LinePlaneIntersectionCommand = new RelayCommand(LinePlaneIntersection);
 
         Zoom1_1Command = new RelayCommand(Zoom1_1);
     }
@@ -229,7 +243,7 @@ public sealed class MainViewModel : ObservableObject
         Vertex v1 = _solid.AddVertex(new Xyz(10, -10, 0));
         Vertex v2 = _solid.AddVertex(new Xyz(10, 10, 0));
         Vertex v3 = _solid.AddVertex(new Xyz(-10, 10, 0));
-        _solid.AddFace([v0, v1, v2, v3]);
+        _solid.AddPlanarFace([v0, v1, v2, v3]);
 
         RefreshScene();
         _view.ZoomExtents();
@@ -241,11 +255,7 @@ public sealed class MainViewModel : ObservableObject
         ShowFaces = true;
 
         _solid = new Solid();
-        Vertex v0 = _solid.AddVertex(new Xyz(-10, -10, -5));
-        Vertex v1 = _solid.AddVertex(new Xyz(10, -10, -5));
-        Vertex v2 = _solid.AddVertex(new Xyz(10, 10, -5));
-        Vertex v3 = _solid.AddVertex(new Xyz(-10, 10, -5));
-        Face face = _solid.AddFace([v0, v1, v2, v3]);
+        Face face = _solid.AddPlanarFace([new Xyz(-10, -10, -5), new Xyz(10, -10, -5), new Xyz(10, 10, -5), new Xyz(-10, 10, -5)]);
         _solid.Extrude(face, new Xyz(0, 0, 20));
 
         RefreshScene();
@@ -254,22 +264,50 @@ public sealed class MainViewModel : ObservableObject
 
     void CreateSphere()
     {
+        _solid = null;
+        ShowFaces = true;
+
         throw new NotImplementedException();
+
+        RefreshScene();
+        _view.ZoomExtents();
     }
 
     void CreateCylinder()
     {
-        throw new NotImplementedException();
+        _solid = null;
+        ShowFaces = true;
+
+        _solid = new Solid();
+        Face face = _solid.AddCircularFace(Xyz.Origin, 10.0, Xyz.ZAxis);
+        _solid.Extrude(face, new Xyz(0, 0, 20));
+
+        RefreshScene();
+        _view.ZoomExtents();
     }
 
     void CreateCone()
     {
+        _solid = null;
+        ShowFaces = true;
+
+        _solid = new Solid();
         throw new NotImplementedException();
+
+        RefreshScene();
+        _view.ZoomExtents();
     }
 
     void CreateTorus()
     {
+        _solid = null;
+        ShowFaces = true;
+
+        _solid = new Solid();
         throw new NotImplementedException();
+
+        RefreshScene();
+        _view.ZoomExtents();
     }
 
     void LineLineIntersection()
@@ -286,11 +324,44 @@ public sealed class MainViewModel : ObservableObject
         Vertex end1 = _solid.AddVertex(new Xyz(0, 24, 24));
         Edge edge1 = _solid.AddEdge(start1, end1);
         var intersector = new CurveCurveIntersector(edge0.GetCurve(), edge1.GetCurve());
-        foreach (IntersectionResult result in intersector.GetIntersections())
+        foreach (CurveCurveIntersectionResult result in intersector.GetIntersections())
         {
             switch (result)
             {
-                case PointIntersectionResult pointIntersection:
+                case PointCurveCurveIntersectionResult pointIntersection:
+                    {
+                        _solid.AddVertex(pointIntersection.Point);
+                        break;
+                    }
+
+                default:
+                    throw new NotImplementedException();
+            }
+        }
+
+        RefreshScene();
+        _view.ZoomExtents();
+    }
+
+    void LinePlaneIntersection()
+    {
+        _solid = null;
+        ShowVertices = true;
+        ShowEdges = true;
+        ShowFaces = true;
+
+        _solid = new Solid();
+
+        Face face = _solid.AddPlanarFace([new Xyz(-10, -10, 0), new Xyz(10, -10, 0), new Xyz(10, 10, 0), new Xyz(-10, 10, 0)]);
+        Vertex start = _solid.AddVertex(new Xyz(0, -6, -10));
+        Vertex end = _solid.AddVertex(new Xyz(2, 3, 10));
+        Edge edge = _solid.AddEdge(start, end);
+        var intersector = new CurveSurfaceIntersector(edge.GetCurve(), face.Surface);
+        foreach (CurveSurfaceIntersectionResult result in intersector.GetIntersections())
+        {
+            switch (result)
+            {
+                case PointCurveSurfaceIntersectionResult pointIntersection:
                     {
                         _solid.AddVertex(pointIntersection.Point);
                         break;
@@ -402,7 +473,22 @@ public sealed class MainViewModel : ObservableObject
         var builder = new MeshBuilder();
         foreach (Face face in _solid.Faces)
         {
-            builder.AddPolygon(face.GetVertices().Select(v => v.Position.ToVector3()).ToList());
+            IEnumerable<Vertex> vertices = face.GetVertices();
+            // TODO Handle non-straight edges.
+            if (vertices.Any())
+            {
+                var points = vertices.Select(v => v.Position.ToVector3()).ToList();
+                // TODO Use our own triangle builder.
+                builder.AddPolygon(points);
+            }
+
+            if (ShowFaceNormals)
+            {
+                Xyz point = face.GetPointOnFace();
+                var p0 = point.ToVector3();
+                Vector3 p1 = p0 + (face.GetNormal(point) * 5).ToVector3();
+                builder.AddArrow(p0, p1, 0.5);
+            }
         }
         var material = new DiffuseMaterial
         {

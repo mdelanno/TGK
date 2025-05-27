@@ -2,7 +2,7 @@ using TGK.Geometry.Curves;
 
 namespace TGK.Geometry;
 
-public class OverlapIntersectionResult : IntersectionResult
+public sealed class OverlapCurveCurveIntersectionResult : CurveCurveIntersectionResult
 {
     public Curve Curve0 { get; }
 
@@ -10,7 +10,7 @@ public class OverlapIntersectionResult : IntersectionResult
 
     public Interval1d IntervalOnCurve0 { get; }
 
-    public OverlapIntersectionResult(Curve curve0, Curve curve1, Interval1d intervalOnCurve0)
+    public OverlapCurveCurveIntersectionResult(Curve curve0, Curve curve1, Interval1d intervalOnCurve0)
     {
         Curve0 = curve0;
         Curve1 = curve1;

@@ -17,9 +17,9 @@ MIT
 To be doable, I had to limit the scope of the project:
 
 - manifold geometry only: two faces share an edge ;
-- no cylinders, only cones ;
 - only one class for points and vectors ;
 - no support for shells, only solids ;
+- no concept of loops ;
 - no 2D projections (to produce 2D drawings) ;
 - no fillets, no chamfers ;
 - no lofting, no sweeping ;

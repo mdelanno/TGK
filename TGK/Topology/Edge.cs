@@ -1,5 +1,4 @@
-﻿using TGK.Geometry;
-using TGK.Geometry.Curves;
+﻿using TGK.Geometry.Curves;
 
 namespace TGK.Topology;
 
@@ -45,11 +44,11 @@ public sealed class Edge : BRepEntity
         Curve = curve;
     }
 
-    public Edge(int id, Circle circle) : this(id)
+    public Edge(int id, Curve curve) : this(id)
     {
-        ArgumentNullException.ThrowIfNull(circle);
+        ArgumentNullException.ThrowIfNull(curve);
 
-        Curve = circle;
+        Curve = curve;
     }
 
     internal void AddUseInternal(EdgeUse edgeUse)

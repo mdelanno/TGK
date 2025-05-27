@@ -31,7 +31,22 @@ public sealed class Solid
         return edge;
     }
 
-    public Face AddFace(IReadOnlyList<Vertex> vertices)
+    public Face AddPlanarFace(IReadOnlyList<Xyz> positions)
+    {
+        ArgumentNullException.ThrowIfNull(Vertices);
+        if (positions.Count < 3)
+            throw new ArgumentException("A face must have at least 3 vertices.");
+
+        var vertices = new List<Vertex>(positions.Count);
+        foreach (Xyz position in positions)
+        {
+            Vertex vertex = AddVertex(position);
+            vertices.Add(vertex);
+        }
+        return AddPlanarFace(vertices);
+    }
+
+    public Face AddPlanarFace(IReadOnlyList<Vertex> vertices)
     {
         ArgumentNullException.ThrowIfNull(vertices);
         if (vertices.Count < 3)
@@ -74,78 +89,104 @@ public sealed class Solid
         var oppositeFace = new Face(Faces.Count, oppositeFacePlane);
         Faces.Add(oppositeFace);
 
-        // Add the first edge for the first side of the extrusion.
-        Edge faceFirstEdge = face.EdgeUses[0].Edge;
-        Vertex faceStartVertex = faceFirstEdge.Start;
-        var oppositeFaceStartVertex = new Vertex(Vertices.Count, faceStartVertex.Position + extrusionVector);
-        Vertices.Add(oppositeFaceStartVertex);
-        Vertex firstOppositeFaceVertex = oppositeFaceStartVertex;
-        var firstEdge = new Edge(Edges.Count, faceStartVertex, oppositeFaceStartVertex);
-        Edges.Add(firstEdge);
-        Edge sideEdgeLeft = firstEdge;
-
-        // Add the other edges for the sides of the extrusion and the opposite face.
-        for (int i = 0; i < face.EdgeUses.Count; i++)
+        if (face.EdgeUses.Count == 1)
         {
-            bool isLastFace = i == face.EdgeUses.Count - 1;
-
-            EdgeUse edgeUse = face.EdgeUses[i];
-            Edge edge = edgeUse.Edge;
-            Vertex oppositeFaceEndVertex;
-            if (isLastFace)
-                oppositeFaceEndVertex = firstOppositeFaceVertex;
-            else
+            // Closed edge (circle, ellipse, etc.)
+            EdgeUse edgeUse = face.EdgeUses[0];
+            Curve curve = edgeUse.Edge.GetCurve();
+            Curve oppositeEdgeCurve;
+            switch (curve)
             {
-                oppositeFaceEndVertex = new Vertex(Vertices.Count, edgeUse.EndVertex.Position + extrusionVector);
-                Vertices.Add(oppositeFaceEndVertex);
-            }
-            Curve? oppositeFaceCurve;
-            switch (edgeUse.Edge.Curve)
-            {
-                case null:
+                case Circle circle:
                     {
-                        oppositeFaceCurve = null;
+                        // Create the opposite face edge as a circle.
+                        oppositeEdgeCurve = new Circle(circle.Center + extrusionVector, circle.Radius, circle.Normal);
                         break;
                     }
 
                 default:
-                    throw new NotSupportedException("Unsupported curve type.");
+                    throw new NotSupportedException("Unsupported curve type for extrusion.");
             }
-            var oppositeFaceEdge = new Edge(Edges.Count, oppositeFaceStartVertex, oppositeFaceEndVertex, oppositeFaceCurve);
+            var oppositeFaceEdge = new Edge(Edges.Count, oppositeEdgeCurve);
             Edges.Add(oppositeFaceEdge);
             oppositeFace.AddEdgeUse(oppositeFaceEdge);
-            oppositeFaceStartVertex = oppositeFaceEndVertex;
+        }
+        else
+        {
+            // Add the first edge for the first side of the extrusion.
+            Edge faceFirstEdge = face.EdgeUses[0].Edge;
+            Vertex? faceStartVertex = faceFirstEdge.Start;
+            if (faceStartVertex == null) throw new NullReferenceException($"{nameof(faceStartVertex)} is null.");
+            var oppositeFaceStartVertex = new Vertex(Vertices.Count, faceStartVertex.Position + extrusionVector);
+            Vertices.Add(oppositeFaceStartVertex);
+            Vertex firstOppositeFaceVertex = oppositeFaceStartVertex;
+            var firstEdge = new Edge(Edges.Count, faceStartVertex, oppositeFaceStartVertex);
+            Edges.Add(firstEdge);
+            Edge sideEdgeLeft = firstEdge;
 
-            // Side face
-            Edge sideEdgeRight;
-            if (isLastFace)
-                sideEdgeRight = firstEdge;
-            else
+            // Add the other edges for the sides of the extrusion and the opposite face.
+            for (int i = 0; i < face.EdgeUses.Count; i++)
             {
-                sideEdgeRight = new Edge(Edges.Count, edgeUse.EndVertex, oppositeFaceEndVertex);
-                Edges.Add(sideEdgeRight);
+                bool isLastFace = i == face.EdgeUses.Count - 1;
+
+                EdgeUse edgeUse = face.EdgeUses[i];
+                Edge edge = edgeUse.Edge;
+                Vertex oppositeFaceEndVertex;
+                if (isLastFace)
+                    oppositeFaceEndVertex = firstOppositeFaceVertex;
+                else
+                {
+                    oppositeFaceEndVertex = new Vertex(Vertices.Count, edgeUse.EndVertex.Position + extrusionVector);
+                    Vertices.Add(oppositeFaceEndVertex);
+                }
+                Curve? oppositeFaceCurve;
+                switch (edgeUse.Edge.Curve)
+                {
+                    case null:
+                        {
+                            oppositeFaceCurve = null;
+                            break;
+                        }
+
+                    default:
+                        throw new NotSupportedException("Unsupported curve type.");
+                }
+                var oppositeFaceEdge = new Edge(Edges.Count, oppositeFaceStartVertex, oppositeFaceEndVertex, oppositeFaceCurve);
+                Edges.Add(oppositeFaceEdge);
+                oppositeFace.AddEdgeUse(oppositeFaceEdge);
+                oppositeFaceStartVertex = oppositeFaceEndVertex;
+
+                // Side face
+                Edge sideEdgeRight;
+                if (isLastFace)
+                    sideEdgeRight = firstEdge;
+                else
+                {
+                    sideEdgeRight = new Edge(Edges.Count, edgeUse.EndVertex, oppositeFaceEndVertex);
+                    Edges.Add(sideEdgeRight);
+                }
+
+                Surface sideFaceSurface;
+                switch (edge.Curve)
+                {
+                    case null:
+                        {
+                            sideFaceSurface = new Plane(edgeUse.StartVertex.Position, edgeUse.EndVertex.Position, oppositeFaceStartVertex.Position);
+                            break;
+                        }
+
+                    default:
+                        throw new NotImplementedException();
+                }
+                var sideFace = new Face(Faces.Count, sideFaceSurface);
+                Faces.Add(sideFace);
+                sideFace.AddEdgeUse(edge);
+                sideFace.AddEdgeUse(sideEdgeRight);
+                sideFace.AddEdgeUse(oppositeFaceEdge, sameSenseAsEdge: false);
+                sideFace.AddEdgeUse(sideEdgeLeft, sameSenseAsEdge: false);
+
+                sideEdgeLeft = sideEdgeRight;
             }
-
-            Surface sideFaceSurface;
-            switch (edge.Curve)
-            {
-                case null:
-                    {
-                        sideFaceSurface = new Plane(edgeUse.StartVertex.Position, edgeUse.EndVertex.Position, oppositeFaceStartVertex.Position);
-                        break;
-                    }
-
-                default:
-                    throw new NotImplementedException();
-            }
-            var sideFace = new Face(Faces.Count, sideFaceSurface);
-            Faces.Add(sideFace);
-            sideFace.AddEdgeUse(edge);
-            sideFace.AddEdgeUse(sideEdgeRight);
-            sideFace.AddEdgeUse(oppositeFaceEdge, sameSenseAsEdge: false);
-            sideFace.AddEdgeUse(sideEdgeLeft, sameSenseAsEdge: false);
-
-            sideEdgeLeft = sideEdgeRight;
         }
 
         // We reverse the face to have the normal pointing outwards.
@@ -157,9 +198,21 @@ public sealed class Solid
         face.ReverseEdgeUsesInternal();
     }
 
-    public void AddEdge(Circle circle)
+    public Edge AddEdge(Circle circle)
     {
         var edge = new Edge(Edges.Count, circle);
         Edges.Add(edge);
+        return edge;
+    }
+
+    public Face AddCircularFace(Xyz origin, double radius, Xyz normal)
+    {
+        var circle = new Circle(origin, radius, normal);
+        Edge edge = AddEdge(circle);
+        Plane surface = circle.GetPlane();
+        var face = new Face(Faces.Count, surface);
+        Faces.Add(face);
+        face.AddEdgeUse(edge);
+        return face;
     }
 }

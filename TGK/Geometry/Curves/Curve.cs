@@ -9,4 +9,6 @@ public abstract class Curve
     public abstract Xyz GetPointAtParameter(double parameter);
 
     public abstract double GetParameterAtPoint(Xyz point);
+
+    public abstract double GetDistanceTo(Xyz point);
 }

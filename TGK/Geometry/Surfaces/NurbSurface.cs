@@ -1,4 +1,5 @@
-﻿using static System.Math;
+﻿using TGK.Geometry.Curves;
+using static System.Math;
 
 namespace TGK.Geometry.Surfaces;
 
@@ -59,5 +60,15 @@ public sealed class NurbSurface : Surface
             res /= i;
         }
         return res;
+    }
+
+    public override IEnumerable<CurveSurfaceIntersectionResult> IntersectWith(Line line, double tolerance = 1e-10)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override Xyz GetNormal(Xyz point)
+    {
+        throw new NotImplementedException();
     }
 }

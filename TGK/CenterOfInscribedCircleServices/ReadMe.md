@@ -1,0 +1,1 @@
+Port in C# of the algorithm found here: https://github.com/mapbox/polylabel

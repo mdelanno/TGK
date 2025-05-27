@@ -8,9 +8,9 @@ public sealed class EdgeUse
 
     public bool SameSenseAsEdge { get; internal set; }
 
-    public Vertex StartVertex => SameSenseAsEdge ? Edge.Start : Edge.End;
+    public Vertex? StartVertex => SameSenseAsEdge ? Edge.Start : Edge.End;
 
-    public Vertex EndVertex => SameSenseAsEdge ? Edge.End : Edge.Start;
+    public Vertex? EndVertex => SameSenseAsEdge ? Edge.End : Edge.Start;
 
     public EdgeUse(Face face, Edge edge, bool sameSenseAsEdge = true)
     {
@@ -27,6 +27,8 @@ public sealed class EdgeUse
     public override string ToString()
     {
         string sameSense = SameSenseAsEdge ? "⇉" : "⇆";
-        return $"eu, e{Edge.Id} {sameSense}, {StartVertex} → {EndVertex}";
+        if (StartVertex != null && EndVertex != null)
+            return $"eu, e{Edge.Id} {sameSense}, {StartVertex} → {EndVertex} ({Face})";
+        return $"eu, e{Edge.Id} {sameSense}";
     }
 }
