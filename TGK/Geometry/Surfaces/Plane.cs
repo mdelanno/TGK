@@ -1,4 +1,4 @@
-﻿namespace TGK.Geometry;
+﻿namespace TGK.Geometry.Surfaces;
 
 public sealed class Plane : Surface
 {

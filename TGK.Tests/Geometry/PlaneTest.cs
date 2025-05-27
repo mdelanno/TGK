@@ -1,5 +1,6 @@
 ﻿using NUnit.Framework;
 using TGK.Geometry;
+using TGK.Geometry.Surfaces;
 
 namespace TGK.Tests.Geometry;
 

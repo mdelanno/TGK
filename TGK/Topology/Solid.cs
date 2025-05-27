@@ -1,4 +1,6 @@
 ﻿using TGK.Geometry;
+using TGK.Geometry.Curves;
+using TGK.Geometry.Surfaces;
 
 namespace TGK.Topology;
 
@@ -153,5 +155,11 @@ public sealed class Solid
         foreach (EdgeUse edgeUse in face.EdgeUses)
             edgeUse.SameSenseAsEdge = !edgeUse.SameSenseAsEdge;
         face.ReverseEdgeUsesInternal();
+    }
+
+    public void AddEdge(Circle circle)
+    {
+        var edge = new Edge(Edges.Count, circle);
+        Edges.Add(edge);
     }
 }

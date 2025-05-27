@@ -7,6 +7,7 @@ using HelixToolkit.Wpf.SharpDX;
 using SharpDX;
 using System.Windows.Media.Media3D;
 using TGK.Geometry;
+using TGK.Geometry.Curves;
 using TGK.Topology;
 using Camera = HelixToolkit.Wpf.SharpDX.Camera;
 using DiffuseMaterial = HelixToolkit.Wpf.SharpDX.DiffuseMaterial;
@@ -38,6 +39,8 @@ public sealed class MainViewModel : ObservableObject
     readonly TextureModel _fontTexture;
 
     BillboardText3D? _modelSpaceLabel;
+
+    double _chordHeight = 0.3;
 
     public bool ShowVertices
     {
@@ -86,7 +89,7 @@ public sealed class MainViewModel : ObservableObject
 
     public RelayCommand CreateVertexCommand { get; }
 
-    public RelayCommand CreateEdgeCommand { get; }
+    public RelayCommand CreateEdgesCommand { get; }
 
     public RelayCommand CreateFaceCommand { get; }
 
@@ -99,6 +102,8 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand CreateConeCommand { get; }
 
     public RelayCommand CreateTorusCommand { get; }
+
+    public RelayCommand LineLineIntersectionCommand { get; }
 
     public EffectsManager EffectsManager { get; } = new DefaultEffectsManager();
 
@@ -118,6 +123,18 @@ public sealed class MainViewModel : ObservableObject
 
     public RelayCommand Zoom1_1Command { get; }
 
+    /// <summary>
+    /// Chord height in screen pixels.
+    /// </summary>
+    public double ChordHeight
+    {
+        get => _chordHeight;
+        set
+        {
+            if (SetProperty(ref _chordHeight, value)) RefreshScene();
+        }
+    }
+
     public MainViewModel(IView view)
     {
         ArgumentNullException.ThrowIfNull(view);
@@ -131,13 +148,15 @@ public sealed class MainViewModel : ObservableObject
         _fontTexture = TextureModel.Create(@"Fonts\Flama.png")!;
 
         CreateVertexCommand = new RelayCommand(CreateVertex);
-        CreateEdgeCommand = new RelayCommand(CreateEdge);
+        CreateEdgesCommand = new RelayCommand(CreateEdges);
         CreateFaceCommand = new RelayCommand(CreateFace);
         CreateBoxCommand = new RelayCommand(CreateBox);
         CreateSphereCommand = new RelayCommand(CreateSphere);
         CreateCylinderCommand = new RelayCommand(CreateCylinder);
         CreateConeCommand = new RelayCommand(CreateCone);
         CreateTorusCommand = new RelayCommand(CreateTorus);
+
+        LineLineIntersectionCommand = new RelayCommand(LineLineIntersection);
 
         Zoom1_1Command = new RelayCommand(Zoom1_1);
     }
@@ -180,19 +199,24 @@ public sealed class MainViewModel : ObservableObject
         _solid.AddVertex(new Xyz(1, 2, 3));
 
         RefreshScene();
+        _view.ZoomExtents();
     }
 
-    void CreateEdge()
+    void CreateEdges()
     {
         _solid = null;
         ShowEdges = true;
 
         _solid = new Solid();
         Vertex start = _solid.AddVertex(new Xyz(1, 2, 3));
-        Vertex edge = _solid.AddVertex(new Xyz(6, 5, 4));
-        _solid.AddEdge(start, edge);
+        Vertex end = _solid.AddVertex(new Xyz(6, 5, 4));
+        _solid.AddEdge(start, end);
+
+        var circle = new Circle(new Xyz(12, 10, 7), 2.5, Xyz.ZAxis);
+        _solid.AddEdge(circle);
 
         RefreshScene();
+        _view.ZoomExtents();
     }
 
     void CreateFace()
@@ -208,6 +232,7 @@ public sealed class MainViewModel : ObservableObject
         _solid.AddFace([v0, v1, v2, v3]);
 
         RefreshScene();
+        _view.ZoomExtents();
     }
 
     void CreateBox()
@@ -224,6 +249,7 @@ public sealed class MainViewModel : ObservableObject
         _solid.Extrude(face, new Xyz(0, 0, 20));
 
         RefreshScene();
+        _view.ZoomExtents();
     }
 
     void CreateSphere()
@@ -246,9 +272,37 @@ public sealed class MainViewModel : ObservableObject
         throw new NotImplementedException();
     }
 
-    void CreateHelix()
+    void LineLineIntersection()
     {
-        throw new NotImplementedException();
+        _solid = null;
+        ShowVertices = true;
+        ShowEdges = true;
+
+        _solid = new Solid();
+        Vertex start0 = _solid.AddVertex(Xyz.Origin);
+        Vertex end0 = _solid.AddVertex(new Xyz(24, 24, 24));
+        Edge edge0 = _solid.AddEdge(start0, end0);
+        Vertex start1 = _solid.AddVertex(new Xyz(24, 0, 0));
+        Vertex end1 = _solid.AddVertex(new Xyz(0, 24, 24));
+        Edge edge1 = _solid.AddEdge(start1, end1);
+        var intersector = new CurveCurveIntersector(edge0.GetCurve(), edge1.GetCurve());
+        foreach (IntersectionResult result in intersector.GetIntersections())
+        {
+            switch (result)
+            {
+                case PointIntersectionResult pointIntersection:
+                    {
+                        _solid.AddVertex(pointIntersection.Point);
+                        break;
+                    }
+
+                default:
+                    throw new NotImplementedException();
+            }
+        }
+
+        RefreshScene();
+        _view.ZoomExtents();
     }
 
     void RefreshScene()
@@ -263,7 +317,6 @@ public sealed class MainViewModel : ObservableObject
         if (ShowVertices) AddVerticesToScene();
         if (ShowEdges) AddEdgesToScene();
         if (ShowFaces) AddFacesToScene();
-        _view.ZoomExtents();
     }
 
     void AddVerticesToScene()
@@ -313,9 +366,22 @@ public sealed class MainViewModel : ObservableObject
         var builder = new LineBuilder();
         foreach (Edge edge in _solid.Edges)
         {
-            var start = edge.Start.Position.ToVector3();
-            var end = edge.End.Position.ToVector3();
-            builder.AddLine(start, end);
+            switch (edge.Curve)
+            {
+                case null:
+                    {
+                        var start = edge.Start!.Position.ToVector3();
+                        var end = edge.End!.Position.ToVector3();
+                        builder.AddLine(start, end);
+                        break;
+                    }
+
+                case Circle circle:
+                    double chordHeightInWorldUnits = ChordHeight / Zoom;
+                    IList<Xyz> strokePoints = circle.GetStrokePoints(chordHeightInWorldUnits);
+                    builder.Add(isClosed: true, strokePoints.Select(p => p.ToVector3()).ToArray());
+                    break;
+            }
         }
         var material = new LineMaterialCore
         {

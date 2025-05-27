@@ -20,6 +20,8 @@ public readonly struct Xyz
 
     public double Length => Sqrt(DotProduct(this));
 
+    public double LengthSquared => DotProduct(this);
+
     public Xyz(double x, double y, double z)
     {
         X = x;
@@ -75,9 +77,44 @@ public readonly struct Xyz
         return new Xyz(X / Length, Y / Length, Z / Length);
     }
 
+    public Xyz GetPerpendicularDirection()
+    {
+        if (Abs(X) < 0.5)
+            return new Xyz(0, Z, -Y);
+        return new Xyz(-Z, 0, X);
+    }
+
+    public double GetAngleTo(in Xyz other)
+    {
+        if (IsZero() || other.IsZero())
+            throw new InvalidOperationException("Cannot calculate angle with zero vector.");
+
+        double cosAngle = DotProduct(other) / (Length * other.Length);
+
+        // To avoid rounding errors.
+        cosAngle = double.Clamp(cosAngle, -1.0, 1.0);
+
+        return Acos(cosAngle);
+    }
+
+    public Xyz Negate()
+    {
+        return new Xyz(-X, -Y, -Z);
+    }
+
+    public bool IsParallelTo(in Xyz other)
+    {
+        return IsAlmostEqualTo(other) || IsAlmostEqualTo(other.Negate());
+    }
+
     public static Xyz operator +(in Xyz p, in Xyz v)
     {
         return new Xyz(p.X + v.X, p.Y + v.Y, p.Z + v.Z);
+    }
+
+public static Xyz operator -(in Xyz p, in Xyz v)
+    {
+        return new Xyz(p.X - v.X, p.Y - v.Y, p.Z - v.Z);
     }
 
     public static Xyz operator *(Xyz v, double a)
