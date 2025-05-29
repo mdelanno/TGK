@@ -21,4 +21,12 @@ public class XyzTest
     {
         Assert.That(Xyz.XAxis.GetAngleTo(Xyz.YAxis), Is.EqualTo(PI / 2.0));
     }
+
+    [Test]
+    public void TestGetCoordinateSystem()
+    {
+        CoordinateSystem coordinateSystem = Xyz.Zero.GetCoordinateSystem(Xyz.ZAxis);
+        Assert.That(coordinateSystem.XAxis, Is.EqualTo(Xyz.XAxis));
+        Assert.That(coordinateSystem.YAxis, Is.EqualTo(Xyz.YAxis));
+    }
 }

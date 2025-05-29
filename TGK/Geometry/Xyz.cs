@@ -4,6 +4,8 @@ namespace TGK.Geometry;
 
 public readonly struct Xyz
 {
+    const double EPSILON = 1 / 64d;
+
     public static Xyz XAxis { get; } = new(1, 0, 0);
 
     public static Xyz YAxis { get; } = new(0, 1, 0);
@@ -16,11 +18,11 @@ public readonly struct Xyz
 
     public double Z { get; }
 
-    public static Xyz Origin { get; } = new(0, 0, 0);
-
     public double Length => Sqrt(DotProduct(this));
 
     public double LengthSquared => DotProduct(this);
+
+    public static Xyz Zero { get; } = new(0, 0, 0);
 
     public Xyz(double x, double y, double z)
     {
@@ -46,15 +48,20 @@ public readonly struct Xyz
 
     public bool IsAlmostEqualTo(in Xyz other, double tolerance)
     {
-        return GetDistanceTo(other) < tolerance;
+        return GetSquaredDistanceTo(other) < tolerance * tolerance;
     }
 
     public double GetDistanceTo(in Xyz other)
     {
+        return Sqrt(GetSquaredDistanceTo(other));
+    }
+
+    public double GetSquaredDistanceTo(in Xyz other)
+    {
         double dx = other.X - X;
         double dy = other.Y - Y;
         double dz = other.Z - Z;
-        return Sqrt(dx * dx + dy * dy + dz * dz);
+        return dx * dx + dy * dy + dz * dz;
     }
 
     public Xyz GetVectorTo(in Xyz other)
@@ -79,9 +86,9 @@ public readonly struct Xyz
 
     public Xyz GetPerpendicularDirection()
     {
-        if (Abs(X) < 0.5)
-            return new Xyz(0, Z, -Y);
-        return new Xyz(-Z, 0, X);
+        if (Abs(X) < EPSILON && Abs(Y) < EPSILON)
+            return YAxis.CrossProduct(this);
+        return ZAxis.CrossProduct(this);
     }
 
     public double GetAngleTo(in Xyz other)
@@ -107,12 +114,24 @@ public readonly struct Xyz
         return IsAlmostEqualTo(other) || IsAlmostEqualTo(other.Negate());
     }
 
+    public bool IsPerpendicularTo(Xyz other, double tolerance = 1e-10)
+    {
+        return Abs(DotProduct(other)) < tolerance;
+    }
+
+    public CoordinateSystem GetCoordinateSystem(in Xyz normal)
+    {
+        Xyz xAxis = normal.GetPerpendicularDirection();
+        Xyz yAxis = normal.CrossProduct(xAxis).GetNormal();
+        return new CoordinateSystem(this, xAxis, yAxis);
+    }
+
     public static Xyz operator +(in Xyz p, in Xyz v)
     {
         return new Xyz(p.X + v.X, p.Y + v.Y, p.Z + v.Z);
     }
 
-public static Xyz operator -(in Xyz p, in Xyz v)
+    public static Xyz operator -(in Xyz p, in Xyz v)
     {
         return new Xyz(p.X - v.X, p.Y - v.Y, p.Z - v.Z);
     }

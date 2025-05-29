@@ -1,6 +1,9 @@
-﻿using TGK.Geometry;
+﻿using System.Diagnostics;
+using TGK.FaceterServices;
+using TGK.Geometry;
 using TGK.Geometry.Curves;
 using TGK.Geometry.Surfaces;
+using static TGK.FaceterServices.TriangulationUtils;
 
 namespace TGK.Topology;
 
@@ -31,11 +34,23 @@ public sealed class Solid
         return edge;
     }
 
+    /// <summary>
+    /// A convenience method to add a planar face defined by a list of positions.
+    /// </summary>
+    /// <param name="positions"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentException"></exception>
     public Face AddPlanarFace(IReadOnlyList<Xyz> positions)
     {
         ArgumentNullException.ThrowIfNull(Vertices);
         if (positions.Count < 3)
             throw new ArgumentException("A face must have at least 3 vertices.");
+
+        Xyz u = positions[0].GetVectorTo(positions[1]);
+        Xyz v = positions[0].GetVectorTo(positions[2]);
+        Xyz planeNormal = u.CrossProduct(v).GetNormal();
+        var plane = new Plane(planeNormal);
+        plane.DistanceFromOrigin = plane.GetSignedDistanceTo(positions[0]);
 
         var vertices = new List<Vertex>(positions.Count);
         foreach (Xyz position in positions)
@@ -43,26 +58,12 @@ public sealed class Solid
             Vertex vertex = AddVertex(position);
             vertices.Add(vertex);
         }
-        return AddPlanarFace(vertices);
-    }
-
-    public Face AddPlanarFace(IReadOnlyList<Vertex> vertices)
-    {
-        ArgumentNullException.ThrowIfNull(vertices);
-        if (vertices.Count < 3)
-            throw new ArgumentException("A face must have at least 3 vertices.");
-        Xyz u = vertices[0].Position.GetVectorTo(vertices[1].Position);
-        Xyz v = vertices[0].Position.GetVectorTo(vertices[2].Position);
-        Xyz planeNormal = u.CrossProduct(v).GetNormal();
-        var plane = new Plane(planeNormal);
-        plane.DistanceFromOrigin = plane.GetSignedDistanceTo(vertices[0].Position);
-
         int id = Faces.Count;
         var face = new Face(id, plane);
-        for (int i = 0; i < vertices.Count; i++)
+        for (int i = 0; i < ((IReadOnlyList<Vertex>)vertices).Count; i++)
         {
-            Vertex vertex = vertices[i];
-            Vertex next = vertices[(i + 1) % vertices.Count];
+            Vertex vertex = ((IReadOnlyList<Vertex>)vertices)[i];
+            Vertex next = ((IReadOnlyList<Vertex>)vertices)[(i + 1) % ((IReadOnlyList<Vertex>)vertices).Count];
             Edge edge = AddEdge(vertex, next);
             face.AddEdgeUse(edge);
         }
@@ -95,12 +96,19 @@ public sealed class Solid
             EdgeUse edgeUse = face.EdgeUses[0];
             Curve curve = edgeUse.Edge.GetCurve();
             Curve oppositeEdgeCurve;
+            Face sideFace;
             switch (curve)
             {
                 case Circle circle:
-                    {
+                {
                         // Create the opposite face edge as a circle.
                         oppositeEdgeCurve = new Circle(circle.Center + extrusionVector, circle.Radius, circle.Normal);
+
+                        var axis = new Line(circle.Center, extrusionVector.GetNormal());
+                        var cylinder = new Cylinder(axis, circle.Radius);
+                        sideFace = new Face(Faces.Count, cylinder);
+                        Faces.Add(sideFace);
+                        sideFace.AddEdgeUse(edgeUse.Edge);
                         break;
                     }
 
@@ -110,12 +118,13 @@ public sealed class Solid
             var oppositeFaceEdge = new Edge(Edges.Count, oppositeEdgeCurve);
             Edges.Add(oppositeFaceEdge);
             oppositeFace.AddEdgeUse(oppositeFaceEdge);
+            sideFace.AddEdgeUse(oppositeFaceEdge);
         }
         else
         {
             // Add the first edge for the first side of the extrusion.
             Edge faceFirstEdge = face.EdgeUses[0].Edge;
-            Vertex? faceStartVertex = faceFirstEdge.Start;
+            Vertex? faceStartVertex = faceFirstEdge.StartVertex;
             if (faceStartVertex == null) throw new NullReferenceException($"{nameof(faceStartVertex)} is null.");
             var oppositeFaceStartVertex = new Vertex(Vertices.Count, faceStartVertex.Position + extrusionVector);
             Vertices.Add(oppositeFaceStartVertex);
@@ -136,7 +145,7 @@ public sealed class Solid
                     oppositeFaceEndVertex = firstOppositeFaceVertex;
                 else
                 {
-                    oppositeFaceEndVertex = new Vertex(Vertices.Count, edgeUse.EndVertex.Position + extrusionVector);
+                    oppositeFaceEndVertex = new Vertex(Vertices.Count, edgeUse.EndVertex!.Position + extrusionVector);
                     Vertices.Add(oppositeFaceEndVertex);
                 }
                 Curve? oppositeFaceCurve;
@@ -162,7 +171,7 @@ public sealed class Solid
                     sideEdgeRight = firstEdge;
                 else
                 {
-                    sideEdgeRight = new Edge(Edges.Count, edgeUse.EndVertex, oppositeFaceEndVertex);
+                    sideEdgeRight = new Edge(Edges.Count, edgeUse.EndVertex!, oppositeFaceEndVertex);
                     Edges.Add(sideEdgeRight);
                 }
 
@@ -171,7 +180,7 @@ public sealed class Solid
                 {
                     case null:
                         {
-                            sideFaceSurface = new Plane(edgeUse.StartVertex.Position, edgeUse.EndVertex.Position, oppositeFaceStartVertex.Position);
+                            sideFaceSurface = new Plane(edgeUse.StartVertex!.Position, edgeUse.EndVertex!.Position, oppositeFaceStartVertex.Position);
                             break;
                         }
 
@@ -189,13 +198,28 @@ public sealed class Solid
             }
         }
 
-        // We reverse the face to have the normal pointing outwards.
-        face.SameSenseAsSurface = !face.SameSenseAsSurface;
+        // We flip the face to have the normal pointing outwards.
+        face.Flip();
+    }
 
-        // We need also to reverse the edge uses.
-        foreach (EdgeUse edgeUse in face.EdgeUses)
-            edgeUse.SameSenseAsEdge = !edgeUse.SameSenseAsEdge;
-        face.ReverseEdgeUsesInternal();
+    public static Solid CreateBox(double sizeX, double sizeY, double sizeZ)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sizeX);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sizeY);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sizeZ);
+
+        var solid = new Solid();
+        double x = sizeX / 2;
+        double y = sizeY / 2;
+        double z = sizeZ / 2;
+        Face face = solid.AddPlanarFace([
+            new Xyz(-x, -y, -z),
+            new Xyz(x, -y, -z),
+            new Xyz(x, y, -z),
+            new Xyz(-x, y, -z),
+        ]);
+        solid.Extrude(face, new Xyz(0, 0, sizeZ));
+        return solid;
     }
 
     public Edge AddEdge(Circle circle)
@@ -214,5 +238,25 @@ public sealed class Solid
         Faces.Add(face);
         face.AddEdgeUse(edge);
         return face;
+    }
+
+    public Mesh GetMesh(double chordHeight, bool fillEdgeIndices = false)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(chordHeight);
+
+        var mesh = new Mesh();
+
+        var adapter = new NodeListAdapter();
+        foreach (Face face in Faces)
+        {
+            List<Node> nodes = face.ProjectBoundaryToParameterSpace(mesh, chordHeight, fillEdgeIndices);
+            adapter.Set(nodes);
+            int[] triangleIndices = EarClipping(adapter, chordHeight);
+            mesh.TriangleIndices.Add(face, triangleIndices);
+        }
+
+        Debug.Assert(mesh.Positions.Count == mesh.Normals.Count, "Mesh positions and normals count should match.");
+
+        return mesh;
     }
 }

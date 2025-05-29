@@ -28,7 +28,7 @@ public sealed class NurbSurface : Surface
 
     public Xyz GetPointAtParameters(double u, double v)
     {
-        Xyz evaluatedPoint = Xyz.Origin;
+        Xyz evaluatedPoint = Xyz.Zero;
         double denominator = 0;
 
         for (int i = 0; i <= _degreeU; i++)
@@ -67,7 +67,17 @@ public sealed class NurbSurface : Surface
         throw new NotImplementedException();
     }
 
-    public override Xyz GetNormal(Xyz point)
+    public override Xyz GetNormal(in Xyz point)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override bool PassesThrough(in Xyz point)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override Uv GetParametersAtPoint(in Xyz point)
     {
         throw new NotImplementedException();
     }

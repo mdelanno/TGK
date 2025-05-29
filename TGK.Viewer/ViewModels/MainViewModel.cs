@@ -5,6 +5,7 @@ using HelixToolkit.SharpDX.Core.Model;
 using HelixToolkit.SharpDX.Core.Model.Scene;
 using HelixToolkit.Wpf.SharpDX;
 using SharpDX;
+using SharpDX.Direct3D11;
 using System.Windows.Media.Media3D;
 using TGK.Geometry;
 using TGK.Geometry.Curves;
@@ -14,6 +15,7 @@ using DiffuseMaterial = HelixToolkit.Wpf.SharpDX.DiffuseMaterial;
 using EffectsManager = HelixToolkit.SharpDX.Core.EffectsManager;
 using ObservableObject = CommunityToolkit.Mvvm.ComponentModel.ObservableObject;
 using OrthographicCamera = HelixToolkit.Wpf.SharpDX.OrthographicCamera;
+using Plane = TGK.Geometry.Surfaces.Plane;
 using PointFigure = HelixToolkit.SharpDX.Core.PointFigure;
 
 namespace TGK.Viewer.ViewModels;
@@ -148,6 +150,8 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    double ChordHeightInWorldUnits => ChordHeight / Zoom;
+
     public MainViewModel(IView view)
     {
         ArgumentNullException.ThrowIfNull(view);
@@ -239,11 +243,18 @@ public sealed class MainViewModel : ObservableObject
         ShowFaces = true;
 
         _solid = new Solid();
-        Vertex v0 = _solid.AddVertex(new Xyz(-10, -10, 0));
-        Vertex v1 = _solid.AddVertex(new Xyz(10, -10, 0));
-        Vertex v2 = _solid.AddVertex(new Xyz(10, 10, 0));
-        Vertex v3 = _solid.AddVertex(new Xyz(-10, 10, 0));
-        _solid.AddPlanarFace([v0, v1, v2, v3]);
+
+        // Draw a T-shape face
+        _solid.AddPlanarFace([
+            Xyz.Zero,
+            new Xyz(1, 0, 0),
+            new Xyz(1, 4, 0),
+            new Xyz(3, 4, 0),
+            new Xyz(3, 5, 0),
+            new Xyz(-2, 5, 0),
+            new Xyz(-2, 4, 0),
+            new Xyz(0, 4, 0)
+        ]);
 
         RefreshScene();
         _view.ZoomExtents();
@@ -279,7 +290,7 @@ public sealed class MainViewModel : ObservableObject
         ShowFaces = true;
 
         _solid = new Solid();
-        Face face = _solid.AddCircularFace(Xyz.Origin, 10.0, Xyz.ZAxis);
+        Face face = _solid.AddCircularFace(Xyz.Zero, 10.0, Xyz.ZAxis);
         _solid.Extrude(face, new Xyz(0, 0, 20));
 
         RefreshScene();
@@ -317,7 +328,7 @@ public sealed class MainViewModel : ObservableObject
         ShowEdges = true;
 
         _solid = new Solid();
-        Vertex start0 = _solid.AddVertex(Xyz.Origin);
+        Vertex start0 = _solid.AddVertex(Xyz.Zero);
         Vertex end0 = _solid.AddVertex(new Xyz(24, 24, 24));
         Edge edge0 = _solid.AddEdge(start0, end0);
         Vertex start1 = _solid.AddVertex(new Xyz(24, 0, 0));
@@ -411,7 +422,8 @@ public sealed class MainViewModel : ObservableObject
         var pointNode = new PointNode
         {
             Material = pointMaterial,
-            Geometry = pointGeometry
+            Geometry = pointGeometry,
+            DepthBias = -1 // To see the points in front of the triangle faces
         };
         RootSceneNode.AddNode(pointNode);
 
@@ -441,15 +453,14 @@ public sealed class MainViewModel : ObservableObject
             {
                 case null:
                     {
-                        var start = edge.Start!.Position.ToVector3();
-                        var end = edge.End!.Position.ToVector3();
+                        var start = edge.StartVertex!.Position.ToVector3();
+                        var end = edge.EndVertex!.Position.ToVector3();
                         builder.AddLine(start, end);
                         break;
                     }
 
                 case Circle circle:
-                    double chordHeightInWorldUnits = ChordHeight / Zoom;
-                    IList<Xyz> strokePoints = circle.GetStrokePoints(chordHeightInWorldUnits);
+                    IList<Xyz> strokePoints = circle.GetStrokePoints(ChordHeightInWorldUnits);
                     builder.Add(isClosed: true, strokePoints.Select(p => p.ToVector3()).ToArray());
                     break;
             }
@@ -471,17 +482,12 @@ public sealed class MainViewModel : ObservableObject
         if (_solid == null) throw new NullReferenceException($"{nameof(_solid)} is null.");
 
         var builder = new MeshBuilder();
+        Mesh mesh = _solid.GetMesh(ChordHeightInWorldUnits);
+        builder.Positions!.AddRange(mesh.Positions.Select(p => p.ToVector3()));
+        foreach (int[] indices in mesh.TriangleIndices.Values) builder.TriangleIndices!.AddRange(indices);
+        builder.Normals!.AddRange(mesh.Normals.Select(n => n.ToVector3()));
         foreach (Face face in _solid.Faces)
         {
-            IEnumerable<Vertex> vertices = face.GetVertices();
-            // TODO Handle non-straight edges.
-            if (vertices.Any())
-            {
-                var points = vertices.Select(v => v.Position.ToVector3()).ToList();
-                // TODO Use our own triangle builder.
-                builder.AddPolygon(points);
-            }
-
             if (ShowFaceNormals)
             {
                 Xyz point = face.GetPointOnFace();
@@ -497,7 +503,8 @@ public sealed class MainViewModel : ObservableObject
         var node = new MeshNode
         {
             Geometry = builder.ToMesh()!,
-            Material = material
+            Material = material,
+            RenderWireframe = true
         };
         RootSceneNode.AddNode(node);
     }
@@ -514,7 +521,7 @@ public sealed class MainViewModel : ObservableObject
         {
             Geometry = _modelSpaceLabel,
             Material = billboardMaterial,
-            //DepthBias = int.MinValue // To see the text in front of the geometry
+            DepthBias = int.MinValue // To see the text in front of the geometry
         };
         RootSceneNode.AddNode(billboardNode);
     }

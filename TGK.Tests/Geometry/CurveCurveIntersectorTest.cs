@@ -13,7 +13,7 @@ public class CurveCurveIntersectorTest
     [Test]
     public void TestLineLineNoIntersection()
     {
-        var line0 = new Line(Xyz.Origin, Xyz.XAxis);
+        var line0 = new Line(Xyz.Zero, Xyz.XAxis);
         var line1 = new Line(new Xyz(0, 1, 0), Xyz.XAxis);
         var intersector = new CurveCurveIntersector(line0, line1);
         IEnumerable<CurveCurveIntersectionResult> results = intersector.GetIntersections();
@@ -24,7 +24,7 @@ public class CurveCurveIntersectorTest
     [Test]
     public void TestLineLinePoint()
     {
-        var line0 = new Line(Xyz.Origin, Xyz.XAxis);
+        var line0 = new Line(Xyz.Zero, Xyz.XAxis);
         var line1 = new Line(new Xyz(0, 1, 0), new Xyz(1, 1, 0).GetNormal());
         var intersector = new CurveCurveIntersector(line0, line1);
         IEnumerable<CurveCurveIntersectionResult> results = intersector.GetIntersections();
@@ -40,7 +40,7 @@ public class CurveCurveIntersectorTest
     [Test]
     public void TestLineLineOverlap()
     {
-        var line0 = new Line(Xyz.Origin, new Xyz(1, 0, 0));
+        var line0 = new Line(Xyz.Zero, new Xyz(1, 0, 0));
         var line1 = new Line(new Xyz(1, 0, 0), new Xyz(1, 0, 0));
         var intersector = new CurveCurveIntersector(line0, line1);
         IEnumerable<CurveCurveIntersectionResult> results = intersector.GetIntersections();

@@ -8,9 +8,9 @@ public sealed class EdgeUse
 
     public bool SameSenseAsEdge { get; internal set; }
 
-    public Vertex? StartVertex => SameSenseAsEdge ? Edge.Start : Edge.End;
+    public Vertex? StartVertex => SameSenseAsEdge ? Edge.StartVertex : Edge.EndVertex;
 
-    public Vertex? EndVertex => SameSenseAsEdge ? Edge.End : Edge.Start;
+    public Vertex? EndVertex => SameSenseAsEdge ? Edge.EndVertex : Edge.StartVertex;
 
     public EdgeUse(Face face, Edge edge, bool sameSenseAsEdge = true)
     {

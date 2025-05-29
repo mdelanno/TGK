@@ -6,13 +6,15 @@ public sealed class Plane : Surface
 {
     public static Plane XY { get; } = new(Xyz.ZAxis);
 
+    public static Plane ZX => new(Xyz.YAxis);
+
     public double DistanceFromOrigin { get; set; }
 
     public Xyz Normal { get; }
 
     public Xyz GetOrigin()
     {
-        return Xyz.Origin + Normal * DistanceFromOrigin;
+        return Xyz.Zero + Normal * DistanceFromOrigin;
     }
 
     public Plane(Xyz normal, double distanceFromOrigin = 0)
@@ -86,8 +88,27 @@ public sealed class Plane : Surface
         yield return new PointCurveSurfaceIntersectionResult(line, this, intersectionPoint);
     }
 
-    public override Xyz GetNormal(Xyz point)
+    public override Xyz GetNormal(in Xyz point)
     {
         return Normal;
+    }
+
+    public override bool PassesThrough(in Xyz point)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override Uv GetParametersAtPoint(in Xyz point)
+    {
+        CoordinateSystem coordinateSystem = GetOrigin().GetCoordinateSystem(Normal);
+        return coordinateSystem.Convert2d(point);
+    }
+
+    public override IEnumerable<Uv> GetParametersAtPoints(IEnumerable<Xyz> points)
+    {
+        Xyz origin = GetOrigin();
+        CoordinateSystem coordinateSystem = origin.GetCoordinateSystem(Normal);
+        foreach (Xyz point in points)
+            yield return coordinateSystem.Convert2d(point);
     }
 }
