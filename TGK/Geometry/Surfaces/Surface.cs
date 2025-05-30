@@ -2,7 +2,7 @@
 
 namespace TGK.Geometry.Surfaces;
 
-public abstract class Surface
+public abstract class Surface : Entity3d
 {
     public abstract IEnumerable<CurveSurfaceIntersectionResult> IntersectWith(Line line, double tolerance = 1e-10);
 

@@ -79,7 +79,7 @@ public readonly struct Xyz
         return X * other.X + Y * other.Y + Z * other.Z;
     }
 
-    public Xyz GetNormal()
+    public Xyz ToUnit()
     {
         return new Xyz(X / Length, Y / Length, Z / Length);
     }
@@ -122,7 +122,7 @@ public readonly struct Xyz
     public CoordinateSystem GetCoordinateSystem(in Xyz normal)
     {
         Xyz xAxis = normal.GetPerpendicularDirection();
-        Xyz yAxis = normal.CrossProduct(xAxis).GetNormal();
+        Xyz yAxis = normal.CrossProduct(xAxis).ToUnit();
         return new CoordinateSystem(this, xAxis, yAxis);
     }
 

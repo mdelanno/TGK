@@ -26,7 +26,7 @@ public sealed class Cylinder : Surface
     {
         if (!PassesThrough(point)) throw new ArgumentException($"{nameof(point)} is not on the cylinder.");
 
-        return Axis.GetClosestPointTo(point).GetVectorTo(point).GetNormal();
+        return Axis.GetClosestPointTo(point).GetVectorTo(point).ToUnit();
     }
 
     public override bool PassesThrough(in Xyz point)
@@ -38,5 +38,10 @@ public sealed class Cylinder : Surface
     public override Uv GetParametersAtPoint(in Xyz point)
     {
         throw new NotImplementedException();
+    }
+
+    public override void TranslateBy(in Xyz translateVector)
+    {
+        Axis.TranslateBy(translateVector);
     }
 }

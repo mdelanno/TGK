@@ -11,11 +11,11 @@ public sealed class Face : BRepEntity
 
     public Surface Surface { get; }
 
-    public IReadOnlyList<EdgeUse> EdgeUses { get; }
+    internal IReadOnlyList<EdgeUse> EdgeUses { get; }
 
     public bool SameSenseAsSurface { get; set; }
 
-    public Face(int id, Surface surface, bool sameSenseAsSurface = true) : base(id)
+    internal Face(int id, Surface surface, bool sameSenseAsSurface = true) : base(id)
     {
         ArgumentNullException.ThrowIfNull(surface);
 
@@ -24,7 +24,7 @@ public sealed class Face : BRepEntity
         EdgeUses = _edgeUses.AsReadOnly();
     }
 
-    public void AddEdgeUse(Edge edge, bool sameSenseAsEdge = true)
+    internal void AddEdgeUse(Edge edge, bool sameSenseAsEdge = true)
     {
         ArgumentNullException.ThrowIfNull(edge);
 
@@ -41,16 +41,17 @@ public sealed class Face : BRepEntity
     {
         foreach (EdgeUse edgeUse in EdgeUses)
         {
-            if (edgeUse.StartVertex == null) continue;
             yield return edgeUse.StartVertex!;
         }
     }
 
     public override string ToString()
     {
-        if (EdgeUses.Count == 0)
+        if (EdgeUses.Count == 1)
             return $"f{Id}, {EdgeUses[0].Edge}";
-        return $"f{Id}: {string.Join(", ", EdgeUses.Select(eu => eu.StartVertex))}";
+        if (EdgeUses.Count <= 4)
+            return $"f{Id}: {string.Join(", ", EdgeUses.Select(eu => eu.StartVertex))}";
+        return $"f{Id}: {EdgeUses[0].StartVertex}, {EdgeUses[1].StartVertex}, ..., {EdgeUses[^2].StartVertex}, {EdgeUses[^1].StartVertex}";
     }
 
     /// <summary>
@@ -94,14 +95,14 @@ public sealed class Face : BRepEntity
         return vertex.Position;
     }
 
-    public Xyz GetNormal(Xyz point)
+    public Xyz GetNormal(in Xyz point)
     {
         Xyz normal = Surface.GetNormal(point);
         if (SameSenseAsSurface) return normal;
         return normal.Negate();
     }
 
-    public PointContainment Contains(Xyz point)
+    public PointContainment Contains(in Xyz point)
     {
         if (EdgeUses.Count == 1)
         {
@@ -116,7 +117,7 @@ public sealed class Face : BRepEntity
         throw new NotImplementedException();
     }
 
-    internal double GetDistanceToBoundary(Xyz point)
+    internal double GetDistanceToBoundary(in Xyz point)
     {
         if (EdgeUses.Count == 1)
         {
@@ -133,35 +134,43 @@ public sealed class Face : BRepEntity
         ArgumentNullException.ThrowIfNull(mesh);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(chordHeight);
 
-        // if (EdgeUses.Count == 1)
-        // {
-        //     Edge edge = EdgeUses[0].Edge;
-        //     int[] indices = edgesIndices[edge];
-        //     Curve? curve = edge.Curve;
-        //     if (curve == null) throw new NullReferenceException($"{nameof(curve)} is null");
-        //     switch (curve)
-        //     {
-        //         case Circle circle:
-        //             {
-        //                 IList<Xyz> strokePoints = circle.GetStrokePoints(chordHeight);
-        //                 CoordinateSystem coordinateSystem = circle.Center.GetCoordinateSystem(circle.Normal);
-        //                 var nodes = new List<Node>(strokePoints.Count);
-        //                 for (int i = 0; i < strokePoints.Count; i++)
-        //                 {
-        //                     Xyz point = strokePoints[i];
-        //                     Uv uv = coordinateSystem.Convert2d(point);
-        //                     var node = new Node(indices[i], uv);
-        //                     nodes.Add(node);
-        //                 }
-        //                 return nodes;
-        //             }
-        //
-        //         default:
-        //             throw new NotImplementedException("Projecting boundary to parameter space is only implemented for circular edges.");
-        //     }
-        // }
+        if (EdgeUses.Count == 1)
+        {
+            Edge edge = EdgeUses[0].Edge;
+            Curve? curve = edge.Curve;
+            if (curve == null) throw new NullReferenceException($"{nameof(curve)} is null");
+            switch (curve)
+            {
+                case Circle circle:
+                    {
+                        IList<Xyz> strokePoints = circle.GetStrokePoints(chordHeight);
+                        CoordinateSystem coordinateSystem = circle.Center.GetCoordinateSystem(circle.Normal);
+                        var nodes = new List<Node>(strokePoints.Count);
+                        int[]? edgeIndices = null;
+                        if (fillEdgeIndices)
+                            edgeIndices = new int[strokePoints.Count];
+                        for (int i = 0; i < strokePoints.Count; i++)
+                        {
+                            Xyz point = strokePoints[i];
+                            Uv uv = coordinateSystem.Convert2d(point);
+                            int pointIndex = mesh.Positions.Count;
+                            if (edgeIndices != null)
+                                edgeIndices[i] = pointIndex;
+                            mesh.Positions.Add(point);
+                            mesh.Normals.Add(circle.Normal);
+                            var node = new Node(pointIndex, uv);
+                            nodes.Add(node);
+                        }
+                        if (edgeIndices != null)
+                            mesh.EdgesIndices.Add(edge, edgeIndices);
+                        return nodes;
+                    }
 
-        // TODO Handle different curves, this code only works for straight edges.
+                default:
+                    throw new NotImplementedException("Projecting boundary to parameter space is only implemented for circular edges.");
+            }
+        }
+
         {
             var points = new List<Xyz>();
             var indices = new List<int>();
@@ -171,21 +180,33 @@ public sealed class Face : BRepEntity
             {
                 Edge edge = edgeUse.Edge;
                 int pointIndex = mesh.Positions.Count;
-                if (fillEdgeIndices)
+                switch (edge.Curve)
                 {
-                    int[] edgeIndices = new int[2];
-                    edgeIndices[0] = pointIndex;
-                    if (edgeUse == lastEdgeUse)
-                    {
-                        // Last EdgeUse, we need to connect the last point to the first point.
-                        edgeIndices[1] = firstPointIndex;
-                    }
-                    else
-                    {
-                        // Not the last EdgeUse, we can just take the next point.
-                        edgeIndices[1] = pointIndex + 1;
-                    }
-                    mesh.EdgesIndices.TryAdd(edge, edgeIndices);
+                    case Circle circle:
+                        {
+                            throw new NotImplementedException("Projecting boundary to parameter space is not implemented for this kind of edge.");
+                        }
+
+                    case null:
+                        {
+                            if (fillEdgeIndices)
+                            {
+                                int[] edgeIndices = new int[2];
+                                edgeIndices[0] = pointIndex;
+                                if (edgeUse == lastEdgeUse)
+                                {
+                                    // Last EdgeUse, we need to connect the last point to the first point.
+                                    edgeIndices[1] = firstPointIndex;
+                                }
+                                else
+                                {
+                                    // Not the last EdgeUse, we can just take the next point.
+                                    edgeIndices[1] = pointIndex + 1;
+                                }
+                                mesh.EdgesIndices.TryAdd(edge, edgeIndices);
+                            }
+                            break;
+                        }
                 }
                 indices.Add(pointIndex);
                 Xyz position = edgeUse.StartVertex!.Position;

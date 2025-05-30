@@ -1,4 +1,5 @@
 ﻿using TGK.Geometry.Curves;
+using static System.Math;
 
 namespace TGK.Geometry.Surfaces;
 
@@ -6,59 +7,57 @@ public sealed class Plane : Surface
 {
     public static Plane XY { get; } = new(Xyz.ZAxis);
 
-    public static Plane ZX => new(Xyz.YAxis);
+    public static Plane YZ { get; } = new(Xyz.XAxis);
 
-    public double DistanceFromOrigin { get; set; }
+    public static Plane ZX { get; } = new(Xyz.YAxis);
 
-    public Xyz Normal { get; }
+    public double DistanceFromOrigin => GetSignedDistanceTo(Origin);
 
-    public Xyz GetOrigin()
-    {
-        return Xyz.Zero + Normal * DistanceFromOrigin;
-    }
+    public Xyz Normal => CoordinateSystem.ZAxis;
+
+    public CoordinateSystem CoordinateSystem { get; }
+
+    public Xyz Origin => CoordinateSystem.Origin;
 
     public Plane(Xyz normal, double distanceFromOrigin = 0)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(distanceFromOrigin);
-
-        DistanceFromOrigin = distanceFromOrigin;
-        Normal = normal;
+        Xyz origin = Xyz.Zero + normal * distanceFromOrigin;
+        CoordinateSystem = origin.GetCoordinateSystem(normal);
     }
 
     /// <summary>
     /// Construct a plane from 3 points.
     /// </summary>
+    /// <param name="origin"></param>
     /// <param name="p0"></param>
     /// <param name="p1"></param>
-    /// <param name="p2"></param>
-    public Plane(in Xyz p0, in Xyz p1, in Xyz p2)
+    public Plane(in Xyz origin, in Xyz p0, in Xyz p1)
     {
+        if (origin.IsAlmostEqualTo(p0))
+            throw new ArgumentException("origin and p0 must be different.");
+        if (origin.IsAlmostEqualTo(p1))
+            throw new ArgumentException("origin and p1 must be different.");
         if (p0.IsAlmostEqualTo(p1))
             throw new ArgumentException("p0 and p1 must be different.");
-        if (p0.IsAlmostEqualTo(p2))
-            throw new ArgumentException("p0 and p2 must be different.");
-        if (p1.IsAlmostEqualTo(p2))
-            throw new ArgumentException("p1 and p2 must be different.");
 
-        Normal = p0.GetVectorTo(p1).CrossProduct(p0.GetVectorTo(p2)).GetNormal();
-        DistanceFromOrigin = Normal.DotProduct(p0);
+        Xyz normal = origin.GetVectorTo(p0).CrossProduct(origin.GetVectorTo(p1)).ToUnit();
+        CoordinateSystem = origin.GetCoordinateSystem(normal);
     }
 
-    public Plane(Xyz normal, Xyz pointOnPlane)
+    public Plane(Xyz normal, Xyz origin)
     {
         ArgumentNullException.ThrowIfNull(normal);
-        ArgumentNullException.ThrowIfNull(pointOnPlane);
+        ArgumentNullException.ThrowIfNull(origin);
 
-        if (normal.IsZero())
-            throw new ArgumentException("Normal vector cannot be zero.");
+        if (!normal.IsUnitLength())
+            throw new ArgumentException("Normal must be a unit vector.", nameof(normal));
 
-        Normal = normal.GetNormal();
-        DistanceFromOrigin = Normal.DotProduct(pointOnPlane);
+        CoordinateSystem = origin.GetCoordinateSystem(normal);
     }
 
     public double GetSignedDistanceTo(in Xyz point)
     {
-        return Normal.DotProduct(point) - DistanceFromOrigin;
+        return Normal.DotProduct(CoordinateSystem.Origin.GetVectorTo(point));
     }
 
     public override IEnumerable<CurveSurfaceIntersectionResult> IntersectWith(Line line, double tolerance = 1e-10)
@@ -67,7 +66,7 @@ public sealed class Plane : Surface
 
         // Calculate the distance from the line origin to the plane.
         double distance = GetSignedDistanceTo(line.Origin);
-        if (Math.Abs(distance) < tolerance)
+        if (Abs(distance) < tolerance)
         {
             // The line is on the plane.
             yield return new OverlapCurveSurfaceIntersectionResult(line, this, Interval1d.Unbounded);
@@ -76,7 +75,7 @@ public sealed class Plane : Surface
 
         // Calculate the direction of the line
         double directionDot = Normal.DotProduct(line.Direction);
-        if (Math.Abs(directionDot) < tolerance)
+        if (Abs(directionDot) < tolerance)
         {
             // The line is parallel to the plane, no intersection.
             yield break;
@@ -100,15 +99,18 @@ public sealed class Plane : Surface
 
     public override Uv GetParametersAtPoint(in Xyz point)
     {
-        CoordinateSystem coordinateSystem = GetOrigin().GetCoordinateSystem(Normal);
-        return coordinateSystem.Convert2d(point);
+        return CoordinateSystem.Convert2d(point);
     }
 
+    [Obsolete("Use GetParametersAtPoint instead.")]
     public override IEnumerable<Uv> GetParametersAtPoints(IEnumerable<Xyz> points)
     {
-        Xyz origin = GetOrigin();
-        CoordinateSystem coordinateSystem = origin.GetCoordinateSystem(Normal);
         foreach (Xyz point in points)
-            yield return coordinateSystem.Convert2d(point);
+            yield return CoordinateSystem.Convert2d(point);
+    }
+
+    public override void TranslateBy(in Xyz translateVector)
+    {
+        CoordinateSystem.TranslateBy(translateVector);
     }
 }

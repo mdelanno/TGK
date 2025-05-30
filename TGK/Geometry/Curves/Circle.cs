@@ -1,15 +1,18 @@
-﻿using TGK.Geometry.Surfaces;
+﻿using System.Diagnostics;
+using TGK.Geometry.Surfaces;
 using static System.Math;
 
 namespace TGK.Geometry.Curves;
 
-public sealed class Circle : Curve
+public sealed class Circle : Curve, IClosedCurve
 {
     public Xyz Normal { get; }
 
     public double Radius { get; set; }
 
     public Xyz Center { get; set; }
+
+    public Xyz ReferenceVector => Normal.GetPerpendicularDirection();
 
     public Circle(Xyz center, double radius, Xyz normal)
     {
@@ -32,13 +35,30 @@ public sealed class Circle : Curve
 
     public IList<Xyz> GetStrokePoints(double chordHeight)
     {
-        if (chordHeight <= 0) throw new ArgumentOutOfRangeException(nameof(chordHeight));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(chordHeight);
 
         double step = CircularEntityUtils.GetParametricStep(chordHeight, Radius, out int numberOfSegments);
         var points = new Xyz[numberOfSegments];
 
         for (int i = 0; i < numberOfSegments; i++) points[i] = GetPointAtParameter(i * step);
 
+        return points;
+    }
+
+    public IList<Xyz> GetStrokePoints(double chordHeight, double startParameter, double endParameter)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(chordHeight);
+        if (startParameter < 0 || endParameter >= Tau || startParameter >= endParameter)
+            throw new ArgumentOutOfRangeException(nameof(startParameter), "Parameters should be in the range [0, 2π) and start should be less than end.");
+
+        double step = CircularEntityUtils.GetParametricStep(chordHeight, Radius);
+        var points = new List<Xyz>();
+        double intervalLength = endParameter - startParameter;
+        int numberOfSegments = (int)Ceiling(intervalLength / step);
+        double adjustedStep = intervalLength / numberOfSegments;
+        for (int i = 0; i < numberOfSegments; i++) points.Add(GetPointAtParameter(i * adjustedStep + startParameter));
+        points.Add(GetPointAtParameter(endParameter));
+        Debug.Assert(points.Count >= 2, "At least two points should be returned for a valid circle segment.");
         return points;
     }
 
@@ -63,6 +83,8 @@ public sealed class Circle : Curve
     {
         return new Plane(Normal, Center);
     }
+
+    public double CalculateArea() => PI * Radius * Radius;
 
     public PointContainment Contains(Xyz point, double tolerance = 1e-10)
     {

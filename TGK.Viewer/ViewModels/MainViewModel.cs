@@ -5,7 +5,9 @@ using HelixToolkit.SharpDX.Core.Model;
 using HelixToolkit.SharpDX.Core.Model.Scene;
 using HelixToolkit.Wpf.SharpDX;
 using SharpDX;
-using SharpDX.Direct3D11;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Windows;
 using System.Windows.Media.Media3D;
 using TGK.Geometry;
 using TGK.Geometry.Curves;
@@ -15,7 +17,6 @@ using DiffuseMaterial = HelixToolkit.Wpf.SharpDX.DiffuseMaterial;
 using EffectsManager = HelixToolkit.SharpDX.Core.EffectsManager;
 using ObservableObject = CommunityToolkit.Mvvm.ComponentModel.ObservableObject;
 using OrthographicCamera = HelixToolkit.Wpf.SharpDX.OrthographicCamera;
-using Plane = TGK.Geometry.Surfaces.Plane;
 using PointFigure = HelixToolkit.SharpDX.Core.PointFigure;
 
 namespace TGK.Viewer.ViewModels;
@@ -46,12 +47,22 @@ public sealed class MainViewModel : ObservableObject
 
     bool _showFaceNormals;
 
+    bool _showBoundingBox;
+
+    GridLength _parametricSpacePaneColumnWidth = new(0, GridUnitType.Pixel);
+
+    GridLength _lastParametricSpacePaneColumnWidth = new(0, GridUnitType.Pixel);
+
+    Face? _selectedFace;
+
+    bool _showWireFrame;
+
     public bool ShowVertices
     {
         get => _showVertices;
         set
         {
-            if (SetProperty(ref _showVertices, value)) RefreshScene();
+            if (SetProperty(ref _showVertices, value)) UpdateUI();
         }
     }
 
@@ -60,7 +71,7 @@ public sealed class MainViewModel : ObservableObject
         get => _showEdges;
         set
         {
-            if (SetProperty(ref _showEdges, value)) RefreshScene();
+            if (SetProperty(ref _showEdges, value)) UpdateUI();
         }
     }
 
@@ -69,7 +80,7 @@ public sealed class MainViewModel : ObservableObject
         get => _showFaces;
         set
         {
-            if (SetProperty(ref _showFaces, value)) RefreshScene();
+            if (SetProperty(ref _showFaces, value)) UpdateUI();
         }
     }
 
@@ -78,7 +89,7 @@ public sealed class MainViewModel : ObservableObject
         get => _showIsoCurve;
         set
         {
-            if (SetProperty(ref _showIsoCurve, value)) RefreshScene();
+            if (SetProperty(ref _showIsoCurve, value)) UpdateUI();
         }
     }
 
@@ -87,7 +98,7 @@ public sealed class MainViewModel : ObservableObject
         get => _showNames;
         set
         {
-            if (SetProperty(ref _showNames, value)) RefreshScene();
+            if (SetProperty(ref _showNames, value)) UpdateUI();
         }
     }
 
@@ -96,7 +107,7 @@ public sealed class MainViewModel : ObservableObject
         get => _showFaceNormals;
         set
         {
-            if (SetProperty(ref _showFaceNormals, value)) RefreshScene();
+            if (SetProperty(ref _showFaceNormals, value)) UpdateUI();
         }
     }
 
@@ -122,7 +133,9 @@ public sealed class MainViewModel : ObservableObject
 
     public EffectsManager EffectsManager { get; } = new DefaultEffectsManager();
 
-    public SceneNodeGroupModel3D RootSceneNode { get; } = new();
+    public SceneNodeGroupModel3D ModelSpaceRootSceneNode { get; } = new();
+
+    public SceneNodeGroupModel3D ParametricSpaceRootSceneNode { get; } = new();
 
     public Camera Camera { get; }
 
@@ -146,11 +159,45 @@ public sealed class MainViewModel : ObservableObject
         get => _chordHeight;
         set
         {
-            if (SetProperty(ref _chordHeight, value)) RefreshScene();
+            if (SetProperty(ref _chordHeight, value)) UpdateUI();
         }
     }
 
     double ChordHeightInWorldUnits => ChordHeight / Zoom;
+
+    public bool ShowBoundingBox
+    {
+        get => _showBoundingBox;
+        set => SetProperty(ref _showBoundingBox, value);
+    }
+
+    public RelayCommand CloseParametricSpacePaneCommand { get; }
+
+    public GridLength ParametricSpacePaneColumnWidth
+    {
+        get => _parametricSpacePaneColumnWidth;
+        set => SetProperty(ref _parametricSpacePaneColumnWidth, value);
+    }
+
+    public ObservableCollection<Face> Faces { get; } = [];
+
+    public Face? SelectedFace
+    {
+        get => _selectedFace;
+        set => SetProperty(ref _selectedFace, value);
+    }
+
+    public bool ShowWireFrame
+    {
+        get => _showWireFrame;
+        set
+        {
+            if (SetProperty(ref _showWireFrame, value))
+            {
+                UpdateUI();
+            }
+        }
+    }
 
     public MainViewModel(IView view)
     {
@@ -177,6 +224,8 @@ public sealed class MainViewModel : ObservableObject
         LinePlaneIntersectionCommand = new RelayCommand(LinePlaneIntersection);
 
         Zoom1_1Command = new RelayCommand(Zoom1_1);
+
+        CloseParametricSpacePaneCommand = new RelayCommand(HideParametricSpacePane);
     }
 
     void Zoom1_1()
@@ -216,7 +265,8 @@ public sealed class MainViewModel : ObservableObject
         _solid = new Solid();
         _solid.AddVertex(new Xyz(1, 2, 3));
 
-        RefreshScene();
+        HideParametricSpacePane();
+        UpdateUI();
         _view.ZoomExtents();
     }
 
@@ -231,16 +281,31 @@ public sealed class MainViewModel : ObservableObject
         _solid.AddEdge(start, end);
 
         var circle = new Circle(new Xyz(12, 10, 7), 2.5, Xyz.ZAxis);
-        _solid.AddEdge(circle);
+        _solid.AddCircularEdge(circle);
 
-        RefreshScene();
+        HideParametricSpacePane();
+        UpdateUI();
         _view.ZoomExtents();
+    }
+
+    void HideParametricSpacePane()
+    {
+        _lastParametricSpacePaneColumnWidth = ParametricSpacePaneColumnWidth;
+        ParametricSpacePaneColumnWidth = new GridLength(0, GridUnitType.Pixel);
+    }
+
+    void ShowParametricSpacePane()
+    {
+        ParametricSpacePaneColumnWidth = _lastParametricSpacePaneColumnWidth is { IsStar: true, Value: > 0 }
+            ? _lastParametricSpacePaneColumnWidth
+            : new GridLength(1, GridUnitType.Star);
     }
 
     void CreateFace()
     {
         _solid = null;
         ShowFaces = true;
+        ShowWireFrame = true;
 
         _solid = new Solid();
 
@@ -256,7 +321,8 @@ public sealed class MainViewModel : ObservableObject
             new Xyz(0, 4, 0)
         ]);
 
-        RefreshScene();
+        ShowParametricSpacePane();
+        UpdateUI();
         _view.ZoomExtents();
     }
 
@@ -264,12 +330,14 @@ public sealed class MainViewModel : ObservableObject
     {
         _solid = null;
         ShowFaces = true;
+        ShowWireFrame = false;
 
         _solid = new Solid();
         Face face = _solid.AddPlanarFace([new Xyz(-10, -10, -5), new Xyz(10, -10, -5), new Xyz(10, 10, -5), new Xyz(-10, 10, -5)]);
         _solid.Extrude(face, new Xyz(0, 0, 20));
 
-        RefreshScene();
+        ShowParametricSpacePane();
+        UpdateUI();
         _view.ZoomExtents();
     }
 
@@ -277,10 +345,12 @@ public sealed class MainViewModel : ObservableObject
     {
         _solid = null;
         ShowFaces = true;
+        ShowWireFrame = true;
 
         throw new NotImplementedException();
 
-        RefreshScene();
+        ShowParametricSpacePane();
+        UpdateUI();
         _view.ZoomExtents();
     }
 
@@ -293,7 +363,8 @@ public sealed class MainViewModel : ObservableObject
         Face face = _solid.AddCircularFace(Xyz.Zero, 10.0, Xyz.ZAxis);
         _solid.Extrude(face, new Xyz(0, 0, 20));
 
-        RefreshScene();
+        ShowParametricSpacePane();
+        UpdateUI();
         _view.ZoomExtents();
     }
 
@@ -305,7 +376,8 @@ public sealed class MainViewModel : ObservableObject
         _solid = new Solid();
         throw new NotImplementedException();
 
-        RefreshScene();
+        ShowParametricSpacePane();
+        UpdateUI();
         _view.ZoomExtents();
     }
 
@@ -317,7 +389,8 @@ public sealed class MainViewModel : ObservableObject
         _solid = new Solid();
         throw new NotImplementedException();
 
-        RefreshScene();
+        ShowParametricSpacePane();
+        UpdateUI();
         _view.ZoomExtents();
     }
 
@@ -350,7 +423,8 @@ public sealed class MainViewModel : ObservableObject
             }
         }
 
-        RefreshScene();
+        HideParametricSpacePane();
+        UpdateUI();
         _view.ZoomExtents();
     }
 
@@ -383,22 +457,54 @@ public sealed class MainViewModel : ObservableObject
             }
         }
 
-        RefreshScene();
+        HideParametricSpacePane();
+        UpdateUI();
         _view.ZoomExtents();
     }
 
-    void RefreshScene()
+    void UpdateUI()
     {
-        RootSceneNode.Clear();
+        ModelSpaceRootSceneNode.Clear();
+        ParametricSpaceRootSceneNode.Clear();
 
         if (_solid is null)
             return;
 
+        UpdateModelSpace();
+        UpdateParametricSpace();
+    }
+
+    void UpdateParametricSpace()
+    {
+        ReloadFaces();
+    }
+
+    void UpdateModelSpace()
+    {
         _modelSpaceLabel = null;
         if (ShowNames) AddNamesToScene();
         if (ShowVertices) AddVerticesToScene();
         if (ShowEdges) AddEdgesToScene();
         if (ShowFaces) AddFacesToScene();
+    }
+
+    void ReloadFaces()
+    {
+        if (_solid == null) return;
+        foreach (Face face in _solid.Faces)
+        {
+            if (!Faces.Contains(face))
+            {
+                int index = _solid.Faces.TakeWhile(f => f.Id < face.Id).Count();
+                Faces.Insert(index, face);
+            }
+        }
+        for (int i = Faces.Count - 1; i >= 0; i--)
+        {
+            if (!_solid.Faces.Contains(Faces[i]))
+                Faces.RemoveAt(i);
+        }
+        SelectedFace = Faces.Count > 0 ? Faces[0] : null;
     }
 
     void AddVerticesToScene()
@@ -423,9 +529,9 @@ public sealed class MainViewModel : ObservableObject
         {
             Material = pointMaterial,
             Geometry = pointGeometry,
-            DepthBias = -1 // To see the points in front of the triangle faces
+            DepthBias = -100 // To see the points in front of the triangle faces
         };
-        RootSceneNode.AddNode(pointNode);
+        ModelSpaceRootSceneNode.AddNode(pointNode);
 
         if (_modelSpaceLabel != null)
         {
@@ -474,7 +580,7 @@ public sealed class MainViewModel : ObservableObject
             Material = material,
             Geometry = builder.ToLineGeometry3D()!
         };
-        RootSceneNode.AddNode(node);
+        ModelSpaceRootSceneNode.AddNode(node);
     }
 
     void AddFacesToScene()
@@ -504,9 +610,9 @@ public sealed class MainViewModel : ObservableObject
         {
             Geometry = builder.ToMesh()!,
             Material = material,
-            RenderWireframe = true
+            RenderWireframe = ShowWireFrame
         };
-        RootSceneNode.AddNode(node);
+        ModelSpaceRootSceneNode.AddNode(node);
     }
 
     void AddNamesToScene()
@@ -523,6 +629,6 @@ public sealed class MainViewModel : ObservableObject
             Material = billboardMaterial,
             DepthBias = int.MinValue // To see the text in front of the geometry
         };
-        RootSceneNode.AddNode(billboardNode);
+        ModelSpaceRootSceneNode.AddNode(billboardNode);
     }
 }

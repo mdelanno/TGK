@@ -48,10 +48,8 @@ public sealed class Solid
 
         Xyz u = positions[0].GetVectorTo(positions[1]);
         Xyz v = positions[0].GetVectorTo(positions[2]);
-        Xyz planeNormal = u.CrossProduct(v).GetNormal();
-        var plane = new Plane(planeNormal);
-        plane.DistanceFromOrigin = plane.GetSignedDistanceTo(positions[0]);
-
+        Xyz planeNormal = u.CrossProduct(v).ToUnit();
+        var plane = new Plane(planeNormal, positions[0]);
         var vertices = new List<Vertex>(positions.Count);
         foreach (Xyz position in positions)
         {
@@ -94,31 +92,34 @@ public sealed class Solid
         {
             // Closed edge (circle, ellipse, etc.)
             EdgeUse edgeUse = face.EdgeUses[0];
-            Curve curve = edgeUse.Edge.GetCurve();
-            Curve oppositeEdgeCurve;
-            Face sideFace;
+            Edge circularEdge = edgeUse.Edge;
+            Curve curve = circularEdge.GetCurve();
             switch (curve)
             {
                 case Circle circle:
-                {
+                    {
                         // Create the opposite face edge as a circle.
-                        oppositeEdgeCurve = new Circle(circle.Center + extrusionVector, circle.Radius, circle.Normal);
-
-                        var axis = new Line(circle.Center, extrusionVector.GetNormal());
+                        Curve oppositeCircle = new Circle(circle.Center + extrusionVector, circle.Radius, circle.Normal);
+                        var axis = new Line(circle.Center, extrusionVector.ToUnit());
                         var cylinder = new Cylinder(axis, circle.Radius);
-                        sideFace = new Face(Faces.Count, cylinder);
+                        var sideFace = new Face(Faces.Count, cylinder);
                         Faces.Add(sideFace);
-                        sideFace.AddEdgeUse(edgeUse.Edge);
+                        sideFace.AddEdgeUse(circularEdge);
+                        Vertex oppositeEdgeVertex = AddVertex(oppositeCircle.GetPointAtParameter(0));
+                        var oppositeFaceEdge = new Edge(Edges.Count, oppositeEdgeVertex, oppositeEdgeVertex, oppositeCircle);
+                        var seam = new Edge(Edges.Count, circularEdge.StartVertex, oppositeEdgeVertex);
+                        Edges.Add(seam);
+                        sideFace.AddEdgeUse(seam);
+                        Edges.Add(oppositeFaceEdge);
+                        oppositeFace.AddEdgeUse(oppositeFaceEdge);
+                        sideFace.AddEdgeUse(oppositeFaceEdge);
+                        sideFace.AddEdgeUse(seam, sameSenseAsEdge: false);
                         break;
                     }
 
                 default:
                     throw new NotSupportedException("Unsupported curve type for extrusion.");
             }
-            var oppositeFaceEdge = new Edge(Edges.Count, oppositeEdgeCurve);
-            Edges.Add(oppositeFaceEdge);
-            oppositeFace.AddEdgeUse(oppositeFaceEdge);
-            sideFace.AddEdgeUse(oppositeFaceEdge);
         }
         else
         {
@@ -222,9 +223,11 @@ public sealed class Solid
         return solid;
     }
 
-    public Edge AddEdge(Circle circle)
+    public Edge AddCircularEdge(Circle circle)
     {
-        var edge = new Edge(Edges.Count, circle);
+        var vertex = new Vertex(Vertices.Count, circle.GetPointAtParameter(0));
+        Vertices.Add(vertex);
+        var edge = new Edge(Edges.Count, vertex, vertex, circle);
         Edges.Add(edge);
         return edge;
     }
@@ -232,7 +235,7 @@ public sealed class Solid
     public Face AddCircularFace(Xyz origin, double radius, Xyz normal)
     {
         var circle = new Circle(origin, radius, normal);
-        Edge edge = AddEdge(circle);
+        Edge edge = AddCircularEdge(circle);
         Plane surface = circle.GetPlane();
         var face = new Face(Faces.Count, surface);
         Faces.Add(face);

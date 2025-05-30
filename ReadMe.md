@@ -31,10 +31,10 @@ Things which are done are in _italics_.
 
 - _points and vectors in 3D space_ ;
 - 3D transformations: translation, rotation, scaling ;
-- 3D primitives: _box_, sphere, cone, torus. A cylinder can be represented with a cone ;
+- 3D primitives: _box_, sphere, cylinder, cone, torus ;
 - extrusion, revolution ;
-- 3D curves : line, circle, ellipse, NURBS ;
-- 3D surfaces : _plane_, sphere, cone, torus, NURBS ;
+- 3D curves: line, circle, ellipse, NURBS ;
+- 3D surfaces: _plane_, sphere, cylinder, cone, torus, NURBS ;
 - intersections between 3D curves ;
 - intersections between 3D curves and surfaces ;
 - intersections between 3D surfaces ;

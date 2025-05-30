@@ -25,7 +25,7 @@ public class CurveCurveIntersectorTest
     public void TestLineLinePoint()
     {
         var line0 = new Line(Xyz.Zero, Xyz.XAxis);
-        var line1 = new Line(new Xyz(0, 1, 0), new Xyz(1, 1, 0).GetNormal());
+        var line1 = new Line(new Xyz(0, 1, 0), new Xyz(1, 1, 0).ToUnit());
         var intersector = new CurveCurveIntersector(line0, line1);
         IEnumerable<CurveCurveIntersectionResult> results = intersector.GetIntersections();
         Assert.That(results, Is.Not.Null);
