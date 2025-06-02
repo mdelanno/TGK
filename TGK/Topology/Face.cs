@@ -227,4 +227,26 @@ public sealed class Face : BRepEntity
         }
         throw new NotImplementedException("Projecting boundary to parameter space is only implemented for single edge faces.");
     }
+
+    public double CalculateArea()
+    {
+        if (EdgeUses.Count == 1)
+        {
+            Edge edge = EdgeUses[0].Edge;
+            Curve? curve = edge.Curve;
+            if (curve == null) throw new NullReferenceException($"{nameof(curve)} is null");
+            switch (curve)
+            {
+                case Circle circle:
+                    {
+                        return circle.CalculateArea();
+                    }
+
+                default:
+                    throw new NotImplementedException("Calculating area is only implemented for circular faces.");
+            }
+        }
+
+        return 5; // TODO
+    }
 }

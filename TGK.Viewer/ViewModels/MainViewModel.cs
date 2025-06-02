@@ -57,12 +57,16 @@ public sealed class MainViewModel : ObservableObject
 
     bool _showWireFrame;
 
+    MeshNode? _faceNormals;
+
+    bool _geometryChanged;
+
     public bool ShowVertices
     {
         get => _showVertices;
         set
         {
-            if (SetProperty(ref _showVertices, value)) UpdateUI();
+            if (SetProperty(ref _showVertices, value)) Update();
         }
     }
 
@@ -71,7 +75,7 @@ public sealed class MainViewModel : ObservableObject
         get => _showEdges;
         set
         {
-            if (SetProperty(ref _showEdges, value)) UpdateUI();
+            if (SetProperty(ref _showEdges, value)) Update();
         }
     }
 
@@ -80,7 +84,7 @@ public sealed class MainViewModel : ObservableObject
         get => _showFaces;
         set
         {
-            if (SetProperty(ref _showFaces, value)) UpdateUI();
+            if (SetProperty(ref _showFaces, value)) Update();
         }
     }
 
@@ -89,7 +93,7 @@ public sealed class MainViewModel : ObservableObject
         get => _showIsoCurve;
         set
         {
-            if (SetProperty(ref _showIsoCurve, value)) UpdateUI();
+            if (SetProperty(ref _showIsoCurve, value)) Update();
         }
     }
 
@@ -98,7 +102,7 @@ public sealed class MainViewModel : ObservableObject
         get => _showNames;
         set
         {
-            if (SetProperty(ref _showNames, value)) UpdateUI();
+            if (SetProperty(ref _showNames, value)) Update();
         }
     }
 
@@ -107,8 +111,48 @@ public sealed class MainViewModel : ObservableObject
         get => _showFaceNormals;
         set
         {
-            if (SetProperty(ref _showFaceNormals, value)) UpdateUI();
+            if (SetProperty(ref _showFaceNormals, value))
+            {
+                if (_showFaceNormals)
+                    AddFaceNormalsNode();
+                else
+                {
+                    _faceNormals?.RemoveSelf();
+                    _faceNormals = null;
+                }
+            }
         }
+    }
+
+    void AddFaceNormalsNode()
+    {
+        if (_solid == null || _solid.Faces.Count == 0) return;
+
+        var builder = new MeshBuilder();
+        var material = new DiffuseMaterial
+        {
+            DiffuseColor = Color.Orange
+        };
+        foreach (Face face in _solid!.Faces)
+        {
+            Xyz point = face.GetPointOnFace();
+            var p0 = point.ToVector3();
+            Vector3 p1 = p0 + (face.GetNormal(point) * face.CalculateArea()).ToVector3();
+            builder.AddArrow(p0, p1, 0.5);
+        }
+        _faceNormals = new MeshNode
+        {
+            Geometry = builder.ToMesh()!,
+            Material = material
+        };
+        ModelSpaceRootSceneNode.AddNode(_faceNormals);
+    }
+
+    void OnGeometryChanged()
+    {
+        _faceNormals?.RemoveSelf();
+        if (ShowFaceNormals)
+            AddFaceNormalsNode();
     }
 
     public RelayCommand CreateVertexCommand { get; }
@@ -159,7 +203,7 @@ public sealed class MainViewModel : ObservableObject
         get => _chordHeight;
         set
         {
-            if (SetProperty(ref _chordHeight, value)) UpdateUI();
+            if (SetProperty(ref _chordHeight, value)) Update();
         }
     }
 
@@ -194,7 +238,7 @@ public sealed class MainViewModel : ObservableObject
         {
             if (SetProperty(ref _showWireFrame, value))
             {
-                UpdateUI();
+                Update();
             }
         }
     }
@@ -265,8 +309,10 @@ public sealed class MainViewModel : ObservableObject
         _solid = new Solid();
         _solid.AddVertex(new Xyz(1, 2, 3));
 
+        _geometryChanged = true;
+
         HideParametricSpacePane();
-        UpdateUI();
+        Update();
         _view.ZoomExtents();
     }
 
@@ -283,8 +329,9 @@ public sealed class MainViewModel : ObservableObject
         var circle = new Circle(new Xyz(12, 10, 7), 2.5, Xyz.ZAxis);
         _solid.AddCircularEdge(circle);
 
+        _geometryChanged = true;
         HideParametricSpacePane();
-        UpdateUI();
+        Update();
         _view.ZoomExtents();
     }
 
@@ -321,8 +368,9 @@ public sealed class MainViewModel : ObservableObject
             new Xyz(0, 4, 0)
         ]);
 
+        _geometryChanged = true;
         ShowParametricSpacePane();
-        UpdateUI();
+        Update();
         _view.ZoomExtents();
     }
 
@@ -336,8 +384,9 @@ public sealed class MainViewModel : ObservableObject
         Face face = _solid.AddPlanarFace([new Xyz(-10, -10, -5), new Xyz(10, -10, -5), new Xyz(10, 10, -5), new Xyz(-10, 10, -5)]);
         _solid.Extrude(face, new Xyz(0, 0, 20));
 
+        _geometryChanged = true;
         ShowParametricSpacePane();
-        UpdateUI();
+        Update();
         _view.ZoomExtents();
     }
 
@@ -349,8 +398,9 @@ public sealed class MainViewModel : ObservableObject
 
         throw new NotImplementedException();
 
+        _geometryChanged = true;
         ShowParametricSpacePane();
-        UpdateUI();
+        Update();
         _view.ZoomExtents();
     }
 
@@ -363,8 +413,10 @@ public sealed class MainViewModel : ObservableObject
         Face face = _solid.AddCircularFace(Xyz.Zero, 10.0, Xyz.ZAxis);
         _solid.Extrude(face, new Xyz(0, 0, 20));
 
+        _geometryChanged = true;
+
         ShowParametricSpacePane();
-        UpdateUI();
+        Update();
         _view.ZoomExtents();
     }
 
@@ -377,7 +429,7 @@ public sealed class MainViewModel : ObservableObject
         throw new NotImplementedException();
 
         ShowParametricSpacePane();
-        UpdateUI();
+        Update();
         _view.ZoomExtents();
     }
 
@@ -390,7 +442,7 @@ public sealed class MainViewModel : ObservableObject
         throw new NotImplementedException();
 
         ShowParametricSpacePane();
-        UpdateUI();
+        Update();
         _view.ZoomExtents();
     }
 
@@ -423,8 +475,10 @@ public sealed class MainViewModel : ObservableObject
             }
         }
 
+        _geometryChanged = true;
+
         HideParametricSpacePane();
-        UpdateUI();
+        Update();
         _view.ZoomExtents();
     }
 
@@ -457,18 +511,27 @@ public sealed class MainViewModel : ObservableObject
             }
         }
 
+        _geometryChanged = true;
+
         HideParametricSpacePane();
-        UpdateUI();
+        Update();
         _view.ZoomExtents();
     }
 
-    void UpdateUI()
+    void Update()
     {
         ModelSpaceRootSceneNode.Clear();
+        _faceNormals = null;
         ParametricSpaceRootSceneNode.Clear();
 
         if (_solid is null)
             return;
+
+        if (_geometryChanged)
+        {
+            _geometryChanged = false;
+            OnGeometryChanged();
+        }
 
         UpdateModelSpace();
         UpdateParametricSpace();
@@ -592,16 +655,6 @@ public sealed class MainViewModel : ObservableObject
         builder.Positions!.AddRange(mesh.Positions.Select(p => p.ToVector3()));
         foreach (int[] indices in mesh.TriangleIndices.Values) builder.TriangleIndices!.AddRange(indices);
         builder.Normals!.AddRange(mesh.Normals.Select(n => n.ToVector3()));
-        foreach (Face face in _solid.Faces)
-        {
-            if (ShowFaceNormals)
-            {
-                Xyz point = face.GetPointOnFace();
-                var p0 = point.ToVector3();
-                Vector3 p1 = p0 + (face.GetNormal(point) * 5).ToVector3();
-                builder.AddArrow(p0, p1, 0.5);
-            }
-        }
         var material = new DiffuseMaterial
         {
             DiffuseColor = Color.LightBlue
