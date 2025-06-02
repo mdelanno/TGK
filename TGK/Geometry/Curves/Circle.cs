@@ -33,7 +33,7 @@ public sealed class Circle : Curve, IClosedCurve
         return new Circle(Center, Radius, Normal);
     }
 
-    public IList<Xyz> GetStrokePoints(double chordHeight)
+    public Xyz[] GetStrokePoints(double chordHeight)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(chordHeight);
 

@@ -6,7 +6,6 @@ using HelixToolkit.SharpDX.Core.Model.Scene;
 using HelixToolkit.Wpf.SharpDX;
 using SharpDX;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Windows;
 using System.Windows.Media.Media3D;
 using TGK.Geometry;
@@ -137,8 +136,10 @@ public sealed class MainViewModel : ObservableObject
         {
             Xyz point = face.GetPointOnFace();
             var p0 = point.ToVector3();
-            Vector3 p1 = p0 + (face.GetNormal(point) * face.CalculateArea()).ToVector3();
-            builder.AddArrow(p0, p1, 0.5);
+            double area = face.CalculateArea(0.1);
+            double arrowLength = area / 25;
+            Vector3 p1 = p0 + (face.GetNormal(point) * arrowLength).ToVector3();
+            builder.AddArrow(p0, p1, arrowLength / 8);
         }
         _faceNormals = new MeshNode
         {
@@ -380,9 +381,7 @@ public sealed class MainViewModel : ObservableObject
         ShowFaces = true;
         ShowWireFrame = false;
 
-        _solid = new Solid();
-        Face face = _solid.AddPlanarFace([new Xyz(-10, -10, -5), new Xyz(10, -10, -5), new Xyz(10, 10, -5), new Xyz(-10, 10, -5)]);
-        _solid.Extrude(face, new Xyz(0, 0, 20));
+        _solid = Solid.CreateBox(10);
 
         _geometryChanged = true;
         ShowParametricSpacePane();
@@ -622,8 +621,8 @@ public sealed class MainViewModel : ObservableObject
             {
                 case null:
                     {
-                        var start = edge.StartVertex!.Position.ToVector3();
-                        var end = edge.EndVertex!.Position.ToVector3();
+                        var start = edge.StartVertex.Position.ToVector3();
+                        var end = edge.EndVertex.Position.ToVector3();
                         builder.AddLine(start, end);
                         break;
                     }

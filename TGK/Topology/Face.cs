@@ -2,6 +2,7 @@
 using TGK.Geometry;
 using TGK.Geometry.Curves;
 using TGK.Geometry.Surfaces;
+using static System.Math;
 
 namespace TGK.Topology;
 
@@ -228,8 +229,10 @@ public sealed class Face : BRepEntity
         throw new NotImplementedException("Projecting boundary to parameter space is only implemented for single edge faces.");
     }
 
-    public double CalculateArea()
+    public double CalculateArea(double chordHeight)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(chordHeight);
+
         if (EdgeUses.Count == 1)
         {
             Edge edge = EdgeUses[0].Edge;
@@ -247,6 +250,44 @@ public sealed class Face : BRepEntity
             }
         }
 
-        return 5; // TODO
+        if (Surface is Plane plane)
+        {
+            // When the surface is a plane, we can calculate the area by discretizing the edges, project the 3D vertices on the plane
+            // and calculating the resulting polygon area.
+            return CalculateArea(plane, chordHeight);
+        }
+
+        throw new NotImplementedException();
+    }
+
+    double CalculateArea(Plane plane, double chordHeight)
+    {
+        ArgumentNullException.ThrowIfNull(plane);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(chordHeight);
+
+        List<Uv> vertices = [];
+        foreach (EdgeUse edgeUse in EdgeUses)
+        {
+            Edge edge = edgeUse.Edge;
+            Curve? curve = edge.Curve;
+            switch (curve)
+            {
+                case null:
+                    // If the edge is a straight line, we can just add the start vertex.
+                    vertices.Add( plane.CoordinateSystem.Convert2d(edgeUse.StartVertex.Position));
+                    break;
+
+                case Circle circle:
+                    Xyz[] strokePoints = circle.GetStrokePoints(chordHeight);
+                    // Exclude the last point to avoid duplicates
+                    vertices.AddRange(strokePoints[..^1].Select(xyz => plane.CoordinateSystem.Convert2d(xyz)));
+                    break;
+
+                default:
+                    throw new NotImplementedException("Calculating area is only implemented for circular edges.");
+            }
+        }
+        var polygon = new Polygon(vertices);
+        return Abs(polygon.CalculateSignedArea());
     }
 }

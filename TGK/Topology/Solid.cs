@@ -203,21 +203,23 @@ public sealed class Solid
         face.Flip();
     }
 
-    public static Solid CreateBox(double sizeX, double sizeY, double sizeZ)
+    public static Solid CreateBox(double sizeX, double sizeY = 0, double sizeZ = 0)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sizeX);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sizeY);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sizeZ);
+        ArgumentOutOfRangeException.ThrowIfNegative(sizeY);
+        ArgumentOutOfRangeException.ThrowIfNegative(sizeZ);
+
+        if (sizeY == 0) sizeY = sizeX;
+        if (sizeZ == 0) sizeZ = sizeX;
 
         var solid = new Solid();
         double x = sizeX / 2;
         double y = sizeY / 2;
-        double z = sizeZ / 2;
         Face face = solid.AddPlanarFace([
-            new Xyz(-x, -y, -z),
-            new Xyz(x, -y, -z),
-            new Xyz(x, y, -z),
-            new Xyz(-x, y, -z),
+            new Xyz(-x, -y, 0),
+            new Xyz(x, -y, 0),
+            new Xyz(x, y, 0),
+            new Xyz(-x, y, 0)
         ]);
         solid.Extrude(face, new Xyz(0, 0, sizeZ));
         return solid;

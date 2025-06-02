@@ -48,4 +48,21 @@ public class FaceTest
         IEnumerable<int> indices = nodes0.Concat(nodes1).Select(n => n.WorldPositionIndex);
         Assert.That(indices.Distinct(), Is.EquivalentTo(Enumerable.Range(0, 8)), "Expected indices to be in the range of 0 to 7.");
     }
+
+    [Test]
+    public void TestCalculateAreaPlanarFace()
+    {
+        var solid = new Solid();
+        Face face = solid.AddPlanarFace([Xyz.Zero, new Xyz(1, 0, 0), new Xyz(0.5, 2, 0)]);
+        double area = face.CalculateArea(0.1);
+        Assert.That(area, Is.EqualTo(1).Within(1e-6), "Expected area of the triangular face to be 1.");
+    }
+
+    [Test]
+    public void TestCalculateAreaCube()
+    {
+        var cube = Solid.CreateBox(10);
+        double area = cube.Faces.First().CalculateArea(0.1);
+        Assert.That(area, Is.EqualTo(100).Within(1e-6), "Expected area of the first face of the cube to be 100.");
+    }
 }
