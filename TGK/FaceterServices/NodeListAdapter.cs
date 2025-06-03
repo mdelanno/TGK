@@ -1,7 +1,6 @@
-﻿using TGK.FaceterServices;
-using TGK.Geometry;
+﻿using TGK.Geometry;
 
-namespace TGK.Topology;
+namespace TGK.FaceterServices;
 
 sealed class NodeListAdapter : IPolygonForTriangulation
 {

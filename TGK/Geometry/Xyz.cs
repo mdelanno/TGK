@@ -43,7 +43,7 @@ public readonly struct Xyz
 
     public bool IsAlmostEqualTo(in Xyz other)
     {
-        return IsAlmostEqualTo(other, Tolerance.Default.Point);
+        return IsAlmostEqualTo(other, Tolerance.Default.Points);
     }
 
     public bool IsAlmostEqualTo(in Xyz other, double tolerance)
@@ -102,6 +102,25 @@ public readonly struct Xyz
         cosAngle = double.Clamp(cosAngle, -1.0, 1.0);
 
         return Acos(cosAngle);
+    }
+
+    /// <summary>
+    /// Return the angle between this vector and the other in the range [0, 2 x Pi[.
+    /// </summary>
+    /// <param name="other"></param>
+    /// <param name="planeNormalVector">Normal vector of the plane in which the angle to be measured</param>
+    /// <returns></returns>
+    public double GetAngleTo(Xyz other, Xyz planeNormalVector)
+    {
+        double angle = GetAngleTo(other);
+        if (angle < Tolerance.Default.Angles || angle.IsAlmostEqualTo(PI)) return angle;
+
+        // Creates a normal vector to the plane formed by this vector and the other and checks the sign of the dot product.
+        // If greater or equal to zero, the other vector is above this vector, and the angle is between 0 and PI. Else
+        // it is between PI and 2 x PI.
+        Xyz v = CrossProduct(other);
+        if (planeNormalVector.DotProduct(v) >= 0) return angle;
+        return 2 * PI - angle;
     }
 
     public Xyz Negate()

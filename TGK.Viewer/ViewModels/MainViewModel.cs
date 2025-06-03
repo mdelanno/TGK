@@ -8,6 +8,7 @@ using SharpDX;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Media.Media3D;
+using TGK.FaceterServices;
 using TGK.Geometry;
 using TGK.Geometry.Curves;
 using TGK.Topology;
@@ -34,9 +35,9 @@ public sealed class MainViewModel : ObservableObject
 
     bool _showFaces = true;
 
-    bool _showIsoCurve = true;
+    bool _showIsoCurves = true;
 
-    bool _showNames;
+    bool _showVerticesNames;
 
     readonly TextureModel _fontTexture;
 
@@ -59,6 +60,8 @@ public sealed class MainViewModel : ObservableObject
     MeshNode? _faceNormals;
 
     bool _geometryChanged;
+
+    Edge? _selectedEdge;
 
     public bool ShowVertices
     {
@@ -87,21 +90,21 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    public bool ShowIsoCurve
+    public bool ShowIsoCurves
     {
-        get => _showIsoCurve;
+        get => _showIsoCurves;
         set
         {
-            if (SetProperty(ref _showIsoCurve, value)) Update();
+            if (SetProperty(ref _showIsoCurves, value)) Update();
         }
     }
 
-    public bool ShowNames
+    public bool ShowVerticesNames
     {
-        get => _showNames;
+        get => _showVerticesNames;
         set
         {
-            if (SetProperty(ref _showNames, value)) Update();
+            if (SetProperty(ref _showVerticesNames, value)) Update();
         }
     }
 
@@ -230,6 +233,14 @@ public sealed class MainViewModel : ObservableObject
     {
         get => _selectedFace;
         set => SetProperty(ref _selectedFace, value);
+    }
+
+    public ObservableCollection<Edge> Edges { get; } = [];
+
+    public Edge? SelectedEdge
+    {
+        get => _selectedEdge;
+        set => SetProperty(ref _selectedEdge, value);
     }
 
     public bool ShowWireFrame
@@ -544,7 +555,7 @@ public sealed class MainViewModel : ObservableObject
     void UpdateModelSpace()
     {
         _modelSpaceLabel = null;
-        if (ShowNames) AddNamesToScene();
+        if (ShowVerticesNames) AddNamesToScene();
         if (ShowVertices) AddVerticesToScene();
         if (ShowEdges) AddEdgesToScene();
         if (ShowFaces) AddFacesToScene();

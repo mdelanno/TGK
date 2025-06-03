@@ -1,6 +1,7 @@
 using TGK.Geometry;
+using TGK.Topology;
 
-namespace TGK.Topology;
+namespace TGK.FaceterServices;
 
 public sealed class Mesh
 {

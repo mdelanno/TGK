@@ -109,6 +109,11 @@ public sealed class Plane : Surface
             yield return CoordinateSystem.Convert2d(point);
     }
 
+    internal override Uv[] ProjectCurveToParametricSpace(Curve curve, double chordHeight)
+    {
+        throw new NotImplementedException();
+    }
+
     public override void TranslateBy(in Xyz translateVector)
     {
         CoordinateSystem.TranslateBy(translateVector);

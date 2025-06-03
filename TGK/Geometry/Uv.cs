@@ -22,7 +22,7 @@ public readonly struct Uv
 
     public bool IsAlmostEqualTo(in Uv other)
     {
-        return IsAlmostEqualTo(other, Tolerance.Default.Point);
+        return IsAlmostEqualTo(other, Tolerance.Default.Points);
     }
 
     public bool IsAlmostEqualTo(in Uv other, double tolerance)
@@ -40,6 +40,13 @@ public readonly struct Uv
         double du = other.U - U;
         double dv = other.V - V;
         return du * du + dv * dv;
+    }
+
+    public Uv Lerp(in Uv other, double t)
+    {
+        if (t is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(t), "t must be between 0 and 1.");
+
+        return new Uv(U + (other.U - U) * t, V + (other.V - V) * t);
     }
 
     /// <summary>

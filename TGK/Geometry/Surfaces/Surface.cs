@@ -23,4 +23,6 @@ public abstract class Surface : Entity3d
         foreach (Xyz point in points)
             yield return GetParametersAtPoint(point);
     }
+
+    internal abstract Uv[] ProjectCurveToParametricSpace(Curve curve, double chordHeight);
 }

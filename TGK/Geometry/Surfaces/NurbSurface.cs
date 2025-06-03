@@ -82,6 +82,11 @@ public sealed class NurbSurface : Surface
         throw new NotImplementedException();
     }
 
+    internal override Uv[] ProjectCurveToParametricSpace(Curve curve, double chordHeight)
+    {
+        throw new NotImplementedException();
+    }
+
     public override void TranslateBy(in Xyz translateVector)
     {
         throw new NotImplementedException();

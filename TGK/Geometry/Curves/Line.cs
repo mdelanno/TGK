@@ -62,6 +62,6 @@ public sealed class Line : Curve
 
     public bool PassesThrough(in Xyz point)
     {
-        return point.GetDistanceTo(GetClosestPointTo(point)) < Tolerance.Default.Point;
+        return point.GetDistanceTo(GetClosestPointTo(point)) < Tolerance.Default.Points;
     }
 }

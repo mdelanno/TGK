@@ -5,8 +5,9 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:hx="http://helix-toolkit.org/wpf/SharpDX"
         xmlns:viewModels="clr-namespace:TGK.Viewer.ViewModels"
+        xmlns:viewer="clr-namespace:TGK.Viewer"
         mc:Ignorable="d" d:DataContext="{d:DesignInstance Type=viewModels:MainViewModel, IsDesignTimeCreatable=False}"
-        Title="Tiny Geometric Kernel Viewer" Height="450" Width="800">
+        Title="Tiny Geometric Kernel Viewer" Height="768" Width="1024">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -14,6 +15,9 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <Menu>
+            <MenuItem Header="_File">
+                <MenuItem Header="_Exit" Command="{x:Static viewer:TgkViewerCommands.Exit}" />
+            </MenuItem>
             <MenuItem Header="_Primitives">
                 <MenuItem Header="_Vertex" Command="{Binding CreateVertexCommand}" />
                 <MenuItem Header="_Edges" Command="{Binding CreateEdgesCommand}" />
@@ -40,8 +44,8 @@
                 <MenuItem Header="Show faces _normals" IsCheckable="True" IsChecked="{Binding ShowFaceNormals}"/>
                 <MenuItem Header="Show _wireframe" IsCheckable="True" IsChecked="{Binding ShowWireFrame}"/>
                 <Separator />
-                <MenuItem Header="Show _isoparametric curves" IsCheckable="True" IsChecked="{Binding ShowIsoCurve}"/>
-                <MenuItem Header="Show _names" IsCheckable="True" IsChecked="{Binding ShowNames}"/>
+                <MenuItem Header="Show _isoparametric curves" IsCheckable="True" IsChecked="{Binding ShowIsoCurves}"/>
+                <MenuItem Header="Show vertices _names" IsCheckable="True" IsChecked="{Binding ShowVerticesNames}"/>
             </MenuItem>
         </Menu>
         <Grid Grid.Row="1">
@@ -80,6 +84,9 @@
                         <Label Margin="0 0 2.5 0">Face:</Label>
                         <ComboBox Width="150" Margin="2.5 0 0 0" VerticalAlignment="Center" ItemsSource="{Binding Faces, Mode=OneTime}"
                                   SelectedItem="{Binding SelectedFace}"/>
+                        <Label Margin="2.5 0">Edge:</Label>
+                        <ComboBox Width="150" Margin="2.5 0 0 0" VerticalAlignment="Center" ItemsSource="{Binding Edges, Mode=OneTime}"
+                                  SelectedItem="{Binding SelectedEdge}"/>
                     </StackPanel>
                     <Button Grid.Row="0" Grid.Column="1" Style="{StaticResource ImageButton}" Command="{Binding CloseParametricSpacePaneCommand}">
                         <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE10A;" FontSize="12" />

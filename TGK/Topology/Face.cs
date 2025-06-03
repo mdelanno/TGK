@@ -144,13 +144,13 @@ public sealed class Face : BRepEntity
             {
                 case Circle circle:
                     {
-                        IList<Xyz> strokePoints = circle.GetStrokePoints(chordHeight);
+                        Xyz[] strokePoints = circle.GetStrokePoints(chordHeight);
                         CoordinateSystem coordinateSystem = circle.Center.GetCoordinateSystem(circle.Normal);
-                        var nodes = new List<Node>(strokePoints.Count);
+                        var nodes = new List<Node>(strokePoints.Length);
                         int[]? edgeIndices = null;
                         if (fillEdgeIndices)
-                            edgeIndices = new int[strokePoints.Count];
-                        for (int i = 0; i < strokePoints.Count; i++)
+                            edgeIndices = new int[strokePoints.Length];
+                        for (int i = 0; i < strokePoints.Length; i++)
                         {
                             Xyz point = strokePoints[i];
                             Uv uv = coordinateSystem.Convert2d(point);
@@ -185,7 +185,30 @@ public sealed class Face : BRepEntity
                 {
                     case Circle circle:
                         {
-                            throw new NotImplementedException("Projecting boundary to parameter space is not implemented for this kind of edge.");
+                            if (Surface is Cylinder cylinder && cylinder.Axis.Direction.IsParallelTo(circle.Normal))
+                            {
+                                Xyz[] strokePoints = circle.GetStrokePoints(chordHeight);
+                                var nodes = new List<Node>(strokePoints.Length);
+                                int[]? edgeIndices = null;
+                                if (fillEdgeIndices)
+                                    edgeIndices = new int[strokePoints.Length];
+                                Uv[] parametricSpacePolyline = cylinder.ProjectCurveToParametricSpace(circle, chordHeight);
+                                for (int i = 0; i < strokePoints.Length; i++)
+                                {
+                                    Xyz point = strokePoints[i];
+                                    if (edgeIndices != null)
+                                        edgeIndices[i] = pointIndex + i;
+                                    mesh.Positions.Add(point);
+                                    mesh.Normals.Add(cylinder.GetNormal(point));
+                                    var node = new Node(pointIndex + i, parametricSpacePolyline[i]);
+                                    nodes.Add(node);
+                                }
+                                if (edgeIndices != null)
+                                    mesh.EdgesIndices.Add(edge, edgeIndices);
+                                return nodes;
+                            }
+                            throw new NotImplementedException(
+                                "Projecting boundary to parametric space is not implemented for this kind of edge.");
                         }
 
                     case null:
@@ -217,14 +240,16 @@ public sealed class Face : BRepEntity
                 mesh.Normals.Add(normal);
             }
             IEnumerable<Uv> uvs = Surface.GetParametersAtPoints(points);
-            var nodes = new List<Node>();
-            for (int i = 0; i < points.Count; i++)
             {
-                Uv uv = uvs.ElementAt(i);
-                var node = new Node(indices[i], uv);
-                nodes.Add(node);
+                var nodes = new List<Node>();
+                for (int i = 0; i < points.Count; i++)
+                {
+                    Uv uv = uvs.ElementAt(i);
+                    var node = new Node(indices[i], uv);
+                    nodes.Add(node);
+                }
+                return nodes;
             }
-            return nodes;
         }
         throw new NotImplementedException("Projecting boundary to parameter space is only implemented for single edge faces.");
     }
