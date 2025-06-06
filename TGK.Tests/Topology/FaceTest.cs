@@ -1,9 +1,18 @@
-﻿using NUnit.Framework;
+﻿using EmptyFiles;
+using NUnit.Framework;
+using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
+using TGK.Dxf;
 using TGK.FaceterServices;
 using TGK.Geometry;
+using TGK.Geometry.Surfaces;
 using TGK.Topology;
+using VerifyNUnit;
+using VerifyTests;
 
 namespace TGK.Tests.Topology;
 
@@ -11,6 +20,12 @@ namespace TGK.Tests.Topology;
 [TestOf(typeof(Face))]
 public class FaceTest
 {
+    static FaceTest()
+    {
+        FileExtensions.AddTextExtension("dxf");
+        VerifierSettings.UseUtf8NoBom();
+    }
+
     [Test]
     public void TestProjectBoundaryToParameterSpaceSingleFace()
     {
@@ -47,6 +62,35 @@ public class FaceTest
 
         IEnumerable<int> indices = nodes0.Concat(nodes1).Select(n => n.WorldPositionIndex);
         Assert.That(indices.Distinct(), Is.EquivalentTo(Enumerable.Range(0, 8)), "Expected indices to be in the range of 0 to 7.");
+    }
+
+    [Test]
+    public Task TestProjectBoundaryToParameterSpaceCylindricFace()
+    {
+        var cylinder = Solid.CreateCylinder(radius: 10, height: 20);
+        Face cylindricFace = cylinder.Faces.Single(f => f.Surface is Cylinder);
+        var mesh = new Mesh();
+        List<Node> nodes = cylindricFace.ProjectBoundaryToParameterSpace(mesh, 0.1);
+        return VerifyNodes(nodes);
+    }
+
+    static Task VerifyNodes(List<Node> nodes)
+    {
+        ArgumentNullException.ThrowIfNull(nodes);
+
+        var writer = new StringWriter(CultureInfo.InvariantCulture);
+        var dxfWriter = new DxfWriter(writer);
+        var polyline = new Polyline2d(nodes.Count);
+        dxfWriter.Entities.Add(polyline);
+        foreach (Node node in nodes)
+        {
+            var vertex = new PolylineVertex2d { Position = node!.ParametricSpacePosition };
+            polyline.Vertices.Add(vertex);
+        }
+
+        dxfWriter.Write();
+        string dxf = writer.ToString();
+        return Verifier.Verify(dxf, extension: "dxf");
     }
 
     [Test]

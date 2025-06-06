@@ -419,10 +419,7 @@ public sealed class MainViewModel : ObservableObject
         _solid = null;
         ShowFaces = true;
 
-        _solid = new Solid();
-        Face face = _solid.AddCircularFace(Xyz.Zero, 10.0, Xyz.ZAxis);
-        _solid.Extrude(face, new Xyz(0, 0, 20));
-
+        _solid = Solid.CreateCylinder(radius: 10, height: 20);
         _geometryChanged = true;
 
         ShowParametricSpacePane();

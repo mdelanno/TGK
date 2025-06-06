@@ -264,4 +264,15 @@ public sealed class Solid
 
         return mesh;
     }
+
+    public static Solid CreateCylinder(double radius, double height)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
+        var solid = new Solid();
+        Face face = solid.AddCircularFace(Xyz.Zero, radius, Xyz.ZAxis);
+        solid.Extrude(face, new Xyz(0, 0, height));
+        return solid;
+    }
 }
