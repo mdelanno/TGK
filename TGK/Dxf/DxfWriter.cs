@@ -18,6 +18,8 @@ public sealed class DxfWriter : WriterBase
 
         foreach (DxfEntity entity in Entities)
         {
+            if (entity is LightWeightPolyline)
+                throw new InvalidOperationException("Light weight polylines are not supported for writing.");
             entity.WriteCommonGroupCodes(this);
             entity.Write(this);
             entity.WriteExtendedData(this);

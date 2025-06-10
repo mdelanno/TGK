@@ -5,6 +5,7 @@ using HelixToolkit.SharpDX.Core.Model;
 using HelixToolkit.SharpDX.Core.Model.Scene;
 using HelixToolkit.Wpf.SharpDX;
 using SharpDX;
+using SharpDX.Direct3D11;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Media.Media3D;
@@ -670,7 +671,8 @@ public sealed class MainViewModel : ObservableObject
         {
             Geometry = builder.ToMesh()!,
             Material = material,
-            RenderWireframe = ShowWireFrame
+            RenderWireframe = ShowWireFrame,
+            CullMode = CullMode.Back
         };
         ModelSpaceRootSceneNode.AddNode(node);
     }

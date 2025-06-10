@@ -130,7 +130,7 @@ public sealed class Face : BRepEntity
         throw new NotImplementedException("Distance to boundary is only implemented for single edge faces.");
     }
 
-    internal List<Node> ProjectBoundaryToParameterSpace(Mesh mesh, double chordHeight, bool fillEdgeIndices = false)
+    internal List<Node> ProjectBoundaryToParameterSpace(Mesh mesh, double chordHeight)
     {
         ArgumentNullException.ThrowIfNull(mesh);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(chordHeight);
@@ -148,8 +148,6 @@ public sealed class Face : BRepEntity
                         CoordinateSystem coordinateSystem = circle.Center.GetCoordinateSystem(circle.Normal);
                         var nodes = new List<Node>(strokePoints.Length);
                         int[]? edgeIndices = null;
-                        if (fillEdgeIndices)
-                            edgeIndices = new int[strokePoints.Length];
                         for (int i = 0; i < strokePoints.Length; i++)
                         {
                             Xyz point = strokePoints[i];
@@ -162,8 +160,6 @@ public sealed class Face : BRepEntity
                             var node = new Node(pointIndex, uv);
                             nodes.Add(node);
                         }
-                        if (edgeIndices != null)
-                            mesh.EdgesIndices.Add(edge, edgeIndices);
                         return nodes;
                     }
 
@@ -173,10 +169,9 @@ public sealed class Face : BRepEntity
         }
 
         {
-            var points = new List<Xyz>();
-            var indices = new List<int>();
-            EdgeUse lastEdgeUse = EdgeUses[^1];
-            int firstPointIndex = mesh.Positions.Count;
+            var nodes = new List<Node>();
+
+            // For each edge use, we omit the last point to make a loop.
             foreach (EdgeUse edgeUse in EdgeUses)
             {
                 Edge edge = edgeUse.Edge;
@@ -188,68 +183,39 @@ public sealed class Face : BRepEntity
                             if (Surface is Cylinder cylinder && cylinder.Axis.Direction.IsParallelTo(circle.Normal))
                             {
                                 Xyz[] strokePoints = circle.GetStrokePoints(chordHeight);
-                                var nodes = new List<Node>(strokePoints.Length);
-                                int[]? edgeIndices = null;
-                                if (fillEdgeIndices)
-                                    edgeIndices = new int[strokePoints.Length];
                                 Uv[] parametricSpacePolyline = cylinder.ProjectCurveToParametricSpace(circle, chordHeight);
                                 for (int i = 0; i < strokePoints.Length; i++)
                                 {
-                                    Xyz point = strokePoints[i];
-                                    if (edgeIndices != null)
-                                        edgeIndices[i] = pointIndex + i;
+                                    int j = edgeUse.SameSenseAsEdge ? i : strokePoints.Length - i - 1;
+                                    int k = edgeUse.SameSenseAsEdge ? i : strokePoints.Length - i;
+                                    Xyz point = strokePoints[j];
                                     mesh.Positions.Add(point);
                                     mesh.Normals.Add(cylinder.GetNormal(point));
-                                    var node = new Node(pointIndex + i, parametricSpacePolyline[i]);
+                                    var node = new Node(pointIndex + i, parametricSpacePolyline[k]);
                                     nodes.Add(node);
                                 }
-                                if (edgeIndices != null)
-                                    mesh.EdgesIndices.Add(edge, edgeIndices);
-                                return nodes;
                             }
-                            throw new NotImplementedException(
-                                "Projecting boundary to parametric space is not implemented for this kind of edge.");
+                            else
+                                throw new NotImplementedException();
+                            break;
                         }
 
                     case null:
                         {
-                            if (fillEdgeIndices)
-                            {
-                                int[] edgeIndices = new int[2];
-                                edgeIndices[0] = pointIndex;
-                                if (edgeUse == lastEdgeUse)
-                                {
-                                    // Last EdgeUse, we need to connect the last point to the first point.
-                                    edgeIndices[1] = firstPointIndex;
-                                }
-                                else
-                                {
-                                    // Not the last EdgeUse, we can just take the next point.
-                                    edgeIndices[1] = pointIndex + 1;
-                                }
-                                mesh.EdgesIndices.TryAdd(edge, edgeIndices);
-                            }
+                            // Straight edge
+                            Xyz point = edgeUse.StartVertex.Position;
+                            Uv parametricSpacePosition = Surface.GetParametersAtPoint(point);
+                            if (edge.Flags.HasFlag(EdgeFlags.Seam) && edgeUse.SameSenseAsEdge)
+                                parametricSpacePosition = new Uv(double.Tau, parametricSpacePosition.V);
+                            var node = new Node(pointIndex, parametricSpacePosition);
+                            nodes.Add(node);
+                            mesh.Positions.Add(point);
+                            mesh.Normals.Add(Surface.GetNormal(point));
                             break;
                         }
                 }
-                indices.Add(pointIndex);
-                Xyz position = edgeUse.StartVertex!.Position;
-                mesh.Positions.Add(position);
-                points.Add(position);
-                Xyz normal = Surface.GetNormal(position);
-                mesh.Normals.Add(normal);
             }
-            IEnumerable<Uv> uvs = Surface.GetParametersAtPoints(points);
-            {
-                var nodes = new List<Node>();
-                for (int i = 0; i < points.Count; i++)
-                {
-                    Uv uv = uvs.ElementAt(i);
-                    var node = new Node(indices[i], uv);
-                    nodes.Add(node);
-                }
-                return nodes;
-            }
+            return nodes;
         }
         throw new NotImplementedException("Projecting boundary to parameter space is only implemented for single edge faces.");
     }
@@ -312,7 +278,7 @@ public sealed class Face : BRepEntity
                     throw new NotImplementedException("Calculating area is only implemented for circular edges.");
             }
         }
-        var polygon = new Polygon(vertices);
+        var polygon = new Polygon(vertices, DirectionOfRotation.CounterClockwise, isSimple: true);
         return Abs(polygon.CalculateSignedArea());
     }
 }

@@ -10,6 +10,7 @@ using TGK.Dxf;
 using TGK.FaceterServices;
 using TGK.Geometry;
 using TGK.Geometry.Surfaces;
+using TGK.Tests.FaceterServices;
 using TGK.Topology;
 using VerifyNUnit;
 using VerifyTests;
@@ -65,7 +66,7 @@ public class FaceTest
     }
 
     [Test]
-    public Task TestProjectBoundaryToParameterSpaceCylindricFace()
+    public Task TestProjectBoundaryToParameterSpaceCylindricFace0()
     {
         var cylinder = Solid.CreateCylinder(radius: 10, height: 20);
         Face cylindricFace = cylinder.Faces.Single(f => f.Surface is Cylinder);
@@ -74,20 +75,31 @@ public class FaceTest
         return VerifyNodes(nodes);
     }
 
+    // [Test]
+    // public Task TestGetMesh()
+    // {
+    //     var cylinder = Solid.CreateCylinder(radius: 10, height: 20);
+    //     Face cylindricFace = cylinder.Faces.Single(f => f.Surface is Cylinder);
+    //     Mesh mesh = cylinder.GetMesh(0.1);
+    //     return VerifyUtils.VerifyTriangleIndices(adapter, mesh.TriangleIndices[cylindricFace]);
+    // }
+
     static Task VerifyNodes(List<Node> nodes)
     {
         ArgumentNullException.ThrowIfNull(nodes);
 
         var writer = new StringWriter(CultureInfo.InvariantCulture);
         var dxfWriter = new DxfWriter(writer);
-        var polyline = new Polyline2d(nodes.Count);
+        var polyline = new Polyline2d(nodes.Count)
+        {
+            IsClosed = true
+        };
         dxfWriter.Entities.Add(polyline);
         foreach (Node node in nodes)
         {
             var vertex = new PolylineVertex2d { Position = node!.ParametricSpacePosition };
             polyline.Vertices.Add(vertex);
         }
-
         dxfWriter.Write();
         string dxf = writer.ToString();
         return Verifier.Verify(dxf, extension: "dxf");

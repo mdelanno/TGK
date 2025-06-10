@@ -25,9 +25,34 @@ static class TriangulationUtils
         int[] triangleIndices = new int[numberOfTriangles * 3];
         int triangleIndex = 0;
 
+        DirectionOfRotation direction = DirectionOfRotation.Unknown;
         while (true)
         {
-            for (int i = 0; i != indices.Count - 1; i++)
+            int start;
+            int end;
+            int increment;
+            switch (direction)
+            {
+                case DirectionOfRotation.Unknown:
+                case DirectionOfRotation.Clockwise:
+                    direction = DirectionOfRotation.CounterClockwise;
+                    start = 0;
+                    end = indices.Count - 1;
+                    increment = 1;
+                    break;
+
+                case DirectionOfRotation.CounterClockwise:
+                    direction = DirectionOfRotation.Clockwise;
+                    start = indices.Count - 1;
+                    end = 0;
+                    increment = -1;
+                    break;
+
+                default:
+                    throw new InvalidOperationException();
+            }
+
+            for (int i = start; i != end; i += increment)
             {
                 int previousVertexIndex = indices[(i + indices.Count - 1) % indices.Count];
                 Uv previous = polygon.GetPosition(previousVertexIndex);

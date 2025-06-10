@@ -56,7 +56,7 @@ public class SolidTest
         faceInXZ.AddEdgeUse(e5);
         faceInXZ.AddEdgeUse(e6);
 
-        Mesh mesh = solid.GetMesh(0.1, fillEdgeIndices: true);
+        Mesh mesh = solid.GetMesh(0.1);
 
         // 4 vertices for the XY face, 4 vertices for the XZ face = 8 vertices.
         Assert.That(mesh.Positions, Has.Count.EqualTo(8), "Expected 8 vertices for the L-shape mesh.");
@@ -69,15 +69,13 @@ public class SolidTest
         Assert.That(triangleIndices.Count(), Is.EqualTo(12), "Expected 12 indices for the L-shape mesh.");
 
         Assert.That(triangleIndices.Distinct(), Is.EquivalentTo(Enumerable.Range(0, 8)), "Expected indices to be in the range of 0 to 7.");
-
-        Assert.That(mesh.EdgesIndices, Has.Count.EqualTo(solid.Edges.Count));
     }
 
     [Test]
     public void TestGetCubeMesh()
     {
         var cube = Solid.CreateBox(2, 2, 2);
-        Mesh mesh = cube.GetMesh(0.1, fillEdgeIndices: true);
+        Mesh mesh = cube.GetMesh(0.1);
 
         // 4 vertices per face, 6 faces = 24 vertices. We cannot share vertices between faces because the normal directions differ.
         Assert.That(mesh.Positions, Has.Count.EqualTo(24), "Expected 24 vertices for the cube mesh.");
@@ -90,7 +88,20 @@ public class SolidTest
         Assert.That(triangleIndices.Count(), Is.EqualTo(36), "Expected 36 indices for the cube mesh.");
 
         Assert.That(triangleIndices.Distinct(), Is.EquivalentTo(Enumerable.Range(0, 24)), "Expected indices to be in the range of 0 to 23.");
+    }
 
-        Assert.That(mesh.EdgesIndices, Has.Count.EqualTo(cube.Edges.Count));
+    [Test]
+    public void TestCreateCylinder()
+    {
+        var cylinder = Solid.CreateCylinder(radius: 10, height: 20);
+        Assert.That(cylinder.Faces, Has.Count.EqualTo(3));
+        IEnumerable<Face> cylindricalFaces = cylinder.Faces.Where(f => f.Surface is Cylinder);
+        Assert.That(cylindricalFaces.Count(), Is.EqualTo(1));
+        Face cylindricalFace = cylindricalFaces.Single();
+        Assert.That(cylindricalFace.EdgeUses.Count, Is.EqualTo(4));
+
+        // The bottom edge use and the left edge use of the cylindrical face are in the same sense as the edge. The two other edge uses are in
+        // the opposite sense.
+        Assert.That(cylindricalFace.EdgeUses.Count(eu => eu.SameSenseAsEdge), Is.EqualTo(2));
     }
 }

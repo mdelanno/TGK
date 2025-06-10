@@ -51,7 +51,7 @@ public sealed class Cylinder : Surface
         double u = ReferenceDirection.GetAngleTo(vector.ToUnit(), Axis.Direction);
         if (double.IsNaN(u))
             throw new InvalidOperationException("GetAngleTo() returned NaN.");
-        return new Uv(u, v);
+        return new Uv(u, v / Radius);
     }
 
     internal override Uv[] ProjectCurveToParametricSpace(Curve curve, double chordHeight)

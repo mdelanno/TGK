@@ -107,12 +107,12 @@ public sealed class Solid
                         sideFace.AddEdgeUse(circularEdge);
                         Vertex oppositeEdgeVertex = AddVertex(oppositeCircle.GetPointAtParameter(0));
                         var oppositeFaceEdge = new Edge(Edges.Count, oppositeEdgeVertex, oppositeEdgeVertex, oppositeCircle);
-                        var seam = new Edge(Edges.Count, circularEdge.StartVertex, oppositeEdgeVertex);
+                        Edges.Add(oppositeFaceEdge);
+                        var seam = new Edge(Edges.Count, circularEdge.StartVertex, oppositeEdgeVertex, flags: EdgeFlags.Seam);
                         Edges.Add(seam);
                         sideFace.AddEdgeUse(seam);
-                        Edges.Add(oppositeFaceEdge);
                         oppositeFace.AddEdgeUse(oppositeFaceEdge);
-                        sideFace.AddEdgeUse(oppositeFaceEdge);
+                        sideFace.AddEdgeUse(oppositeFaceEdge, sameSenseAsEdge: false);
                         sideFace.AddEdgeUse(seam, sameSenseAsEdge: false);
                         break;
                     }
@@ -245,7 +245,7 @@ public sealed class Solid
         return face;
     }
 
-    public Mesh GetMesh(double chordHeight, bool fillEdgeIndices = false)
+    public Mesh GetMesh(double chordHeight)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(chordHeight);
 
@@ -254,9 +254,9 @@ public sealed class Solid
         var adapter = new NodeListAdapter();
         foreach (Face face in Faces)
         {
-            List<Node> nodes = face.ProjectBoundaryToParameterSpace(mesh, chordHeight, fillEdgeIndices);
+            List<Node> nodes = face.ProjectBoundaryToParameterSpace(mesh, chordHeight);
             adapter.Set(nodes);
-            int[] triangleIndices = EarClipping(adapter, chordHeight);
+            int[] triangleIndices = EarClipping(adapter);
             mesh.TriangleIndices.Add(face, triangleIndices);
         }
 
