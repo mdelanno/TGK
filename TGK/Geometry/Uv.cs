@@ -73,4 +73,9 @@ public readonly struct Uv
     {
         return FormattableString.Invariant($"({U:0.###}, {V:0.###})");
     }
+
+    public Xyz ToXyz(double z = 0)
+    {
+        return new Xyz(U, V, z);
+    }
 }

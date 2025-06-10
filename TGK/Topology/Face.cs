@@ -147,14 +147,10 @@ public sealed class Face : BRepEntity
                         Xyz[] strokePoints = circle.GetStrokePoints(chordHeight);
                         CoordinateSystem coordinateSystem = circle.Center.GetCoordinateSystem(circle.Normal);
                         var nodes = new List<Node>(strokePoints.Length);
-                        int[]? edgeIndices = null;
-                        for (int i = 0; i < strokePoints.Length; i++)
+                        foreach (Xyz point in strokePoints)
                         {
-                            Xyz point = strokePoints[i];
                             Uv uv = coordinateSystem.Convert2d(point);
                             int pointIndex = mesh.Positions.Count;
-                            if (edgeIndices != null)
-                                edgeIndices[i] = pointIndex;
                             mesh.Positions.Add(point);
                             mesh.Normals.Add(circle.Normal);
                             var node = new Node(pointIndex, uv);
@@ -182,16 +178,30 @@ public sealed class Face : BRepEntity
                         {
                             if (Surface is Cylinder cylinder && cylinder.Axis.Direction.IsParallelTo(circle.Normal))
                             {
-                                Xyz[] strokePoints = circle.GetStrokePoints(chordHeight);
-                                Uv[] parametricSpacePolyline = cylinder.ProjectCurveToParametricSpace(circle, chordHeight);
-                                for (int i = 0; i < strokePoints.Length; i++)
+                                Xyz[] points3d = circle.GetStrokePoints(chordHeight);
+                                Uv[] points2d = cylinder.ProjectCurveToParametricSpace(circle, chordHeight);
+                                if (!edgeUse.SameSenseAsEdge)
                                 {
-                                    int j = edgeUse.SameSenseAsEdge ? i : strokePoints.Length - i - 1;
-                                    int k = edgeUse.SameSenseAsEdge ? i : strokePoints.Length - i;
-                                    Xyz point = strokePoints[j];
+                                    // C'est un peu compliqué ici : on doit parcourir les points dans l'ordre inverse, mais on doit aussi
+                                    // démarrer à u = 2 Pi et omettre u = zéro. Donc, on décale les points 2D vers la gauche avec Array.Copy(),
+                                    // puis on ajoute le dernier point de la jointure à la fin.
+                                    Array.Copy(points2d, 1, points2d, 0, points2d.Length - 1);
+                                    EdgeUse previousEdgeUse = GetPreviousEdgeUse(edgeUse);
+                                    Uv uv = cylinder.GetParametersAtPoint(previousEdgeUse.EndVertex.Position);
+                                    points2d[^1] = new Uv(double.Tau, uv.V);
+                                    Array.Reverse(points2d);
+
+                                    // On fait pareil avec les points 3D.
+                                    Array.Copy(points3d, 1, points3d, 0, points3d.Length - 1);
+                                    points3d[^1] = previousEdgeUse.EndVertex.Position;
+                                    Array.Reverse(points3d);
+                                }
+                                for (int i = 0; i < points3d.Length; i++)
+                                {
+                                    Xyz point = points3d[i];
                                     mesh.Positions.Add(point);
                                     mesh.Normals.Add(cylinder.GetNormal(point));
-                                    var node = new Node(pointIndex + i, parametricSpacePolyline[k]);
+                                    var node = new Node(pointIndex + i, points2d[i]);
                                     nodes.Add(node);
                                 }
                             }
@@ -218,6 +228,14 @@ public sealed class Face : BRepEntity
             return nodes;
         }
         throw new NotImplementedException("Projecting boundary to parameter space is only implemented for single edge faces.");
+    }
+
+    EdgeUse GetPreviousEdgeUse(EdgeUse edgeUse)
+    {
+        ArgumentNullException.ThrowIfNull(edgeUse);
+
+        int index = _edgeUses.IndexOf(edgeUse);
+        return _edgeUses[(index + _edgeUses.Count - 1) % _edgeUses.Count];
     }
 
     public double CalculateArea(double chordHeight)

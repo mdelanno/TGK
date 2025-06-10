@@ -37,6 +37,8 @@ public sealed class CoordinateSystem : Entity3d
         ZAxis = zAxis;
     }
 
+    public Plane GetXY() => new Plane(Origin, Origin + XAxis, Origin + YAxis);
+
     public Uv Convert2d(in Xyz point)
     {
         Xyz v = Origin.GetVectorTo(point);

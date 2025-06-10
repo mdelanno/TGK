@@ -66,7 +66,7 @@ public class FaceTest
     }
 
     [Test]
-    public Task TestProjectBoundaryToParameterSpaceCylindricFace0()
+    public Task TestProjectBoundaryToParameterSpaceCylindricFace()
     {
         var cylinder = Solid.CreateCylinder(radius: 10, height: 20);
         Face cylindricFace = cylinder.Faces.Single(f => f.Surface is Cylinder);
@@ -74,15 +74,6 @@ public class FaceTest
         List<Node> nodes = cylindricFace.ProjectBoundaryToParameterSpace(mesh, 0.1);
         return VerifyNodes(nodes);
     }
-
-    // [Test]
-    // public Task TestGetMesh()
-    // {
-    //     var cylinder = Solid.CreateCylinder(radius: 10, height: 20);
-    //     Face cylindricFace = cylinder.Faces.Single(f => f.Surface is Cylinder);
-    //     Mesh mesh = cylinder.GetMesh(0.1);
-    //     return VerifyUtils.VerifyTriangleIndices(adapter, mesh.TriangleIndices[cylindricFace]);
-    // }
 
     static Task VerifyNodes(List<Node> nodes)
     {

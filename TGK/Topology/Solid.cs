@@ -245,26 +245,6 @@ public sealed class Solid
         return face;
     }
 
-    public Mesh GetMesh(double chordHeight)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(chordHeight);
-
-        var mesh = new Mesh();
-
-        var adapter = new NodeListAdapter();
-        foreach (Face face in Faces)
-        {
-            List<Node> nodes = face.ProjectBoundaryToParameterSpace(mesh, chordHeight);
-            adapter.Set(nodes);
-            int[] triangleIndices = EarClipping(adapter);
-            mesh.TriangleIndices.Add(face, triangleIndices);
-        }
-
-        Debug.Assert(mesh.Positions.Count == mesh.Normals.Count, "Mesh positions and normals count should match.");
-
-        return mesh;
-    }
-
     public static Solid CreateCylinder(double radius, double height)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);

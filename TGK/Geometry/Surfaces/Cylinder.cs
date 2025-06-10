@@ -54,6 +54,10 @@ public sealed class Cylinder : Surface
         return new Uv(u, v / Radius);
     }
 
+    /// <remarks>
+    /// When the curve in 3D space is closed, we do not return the last point in parametric space, because we use the points obtained to create a loop
+    /// (the last point will be ignored anyway, so we do not return it).
+    /// </remarks>
     internal override Uv[] ProjectCurveToParametricSpace(Curve curve, double chordHeight)
     {
         switch (curve)
@@ -74,12 +78,8 @@ public sealed class Cylinder : Surface
         if (Axis.Direction.IsParallelTo(circle.Normal))
         {
             Xyz[] strokePoints = circle.GetStrokePoints(chordHeight);
-
-            // As we unroll the curve, we need to add a point.
-            var uvPoints = new Uv[strokePoints.Length + 1];
-
+            var uvPoints = new Uv[strokePoints.Length];
             for (int i = 0; i < strokePoints.Length; i++) uvPoints[i] = GetParametersAtPoint(strokePoints[i]);
-            uvPoints[^1] = new Uv(double.Tau, uvPoints[0].V);
             return uvPoints;
         }
 
