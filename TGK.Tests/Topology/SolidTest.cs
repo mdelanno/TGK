@@ -51,4 +51,18 @@ public class SolidTest
         // the opposite sense.
         Assert.That(cylindricalFace.EdgeUses.Count(eu => eu.SameSenseAsEdge), Is.EqualTo(2));
     }
+
+    [Test]
+    public void TestCreateSphere()
+    {
+        var sphere = Solid.CreateSphere(radius: 10);
+        Assert.That(sphere.Faces, Has.Count.EqualTo(1), "Expected 1 face for the sphere.");
+        Face sphericalFace = sphere.Faces.Single();
+        Assert.That(sphericalFace.Surface, Is.InstanceOf<Sphere>(), "Expected the face to be a spherical surface.");
+        Assert.That(sphericalFace.EdgeUses.Count, Is.EqualTo(4), "Expected 4 edge uses for the spherical face.");
+        Assert.That(sphericalFace.EdgeUses.Count(eu => eu.SameSenseAsEdge), Is.EqualTo(3), "Expected 3 edge uses in the same sense as the edge.");
+        Assert.That(sphericalFace.EdgeUses.Count(eu => !eu.SameSenseAsEdge), Is.EqualTo(1), "Expected 1 edge uses in the opposite sense as the edge.");
+        IEnumerable<Vertex> vertices = sphericalFace.GetVertices();
+        Assert.That(vertices.Count(), Is.EqualTo(2), "Expected 2 vertices for the spherical face.");
+    }
 }

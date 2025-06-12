@@ -393,7 +393,7 @@ public sealed class MainViewModel : ObservableObject
         ShowFaces = true;
         ShowWireFrame = false;
 
-        _solid = Solid.CreateBox(10);
+        _solid = Solid.CreateBox(size: 10);
 
         _geometryChanged = true;
         ShowParametricSpacePane();
@@ -407,7 +407,7 @@ public sealed class MainViewModel : ObservableObject
         ShowFaces = true;
         ShowWireFrame = true;
 
-        throw new NotImplementedException();
+        _solid = Solid.CreateSphere(radius: 10);
 
         _geometryChanged = true;
         ShowParametricSpacePane();

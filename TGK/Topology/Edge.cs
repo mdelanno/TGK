@@ -7,6 +7,9 @@ public sealed class Edge : BRepEntity
 {
     readonly List<EdgeUse> _uses = [];
 
+    /// <remarks>
+    /// Null if the edge is straight or if it is a pole edge.
+    /// </remarks>
     public Curve? Curve { get; }
 
     public Vertex StartVertex { get; }
@@ -30,7 +33,7 @@ public sealed class Edge : BRepEntity
     {
         ArgumentNullException.ThrowIfNull(startVertex);
         ArgumentNullException.ThrowIfNull(endVertex);
-        if (curve == null && startVertex == endVertex)
+        if (curve == null && !flags.HasFlag(EdgeFlags.Pole) && startVertex == endVertex)
             throw new ArgumentException("Start and end vertex can not be the same if the edge is straight.");
 
         Uses = _uses.AsReadOnly();
@@ -51,40 +54,6 @@ public sealed class Edge : BRepEntity
         ArgumentNullException.ThrowIfNull(edgeUse);
 
         _uses.Add(edgeUse);
-    }
-
-    /// <summary>
-    /// Returns the stroke points of the edge (excluding the start and end vertices).
-    ///
-    /// Returns an empty list if the edge is straight or if the edge is very short.
-    /// </summary>
-    /// <param name="chordHeight"></param>
-    /// <returns></returns>
-    public IList<Xyz> GetStrokePoints(double chordHeight)
-    {
-        switch (Curve)
-        {
-            case Circle circle:
-                IList<Xyz> strokePoints;
-                if (StartVertex == EndVertex)
-                {
-                    // Full circle
-                    strokePoints = circle.GetStrokePoints(chordHeight);
-                }
-                else
-                {
-                    double startParameter = circle.GetParameterAtPoint(StartVertex.Position);
-                    double endParameter = circle.GetParameterAtPoint(EndVertex.Position);
-                    strokePoints = circle.GetStrokePoints(chordHeight, startParameter, endParameter);
-                }
-                return strokePoints.Skip(1).Take(strokePoints.Count - 2).ToArray();
-
-            case null:
-                return [];
-
-            default:
-                throw new NotImplementedException();
-        }
     }
 
     public override string ToString()

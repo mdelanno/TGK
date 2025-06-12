@@ -42,7 +42,8 @@ public sealed class Face : BRepEntity
     {
         foreach (EdgeUse edgeUse in EdgeUses)
         {
-            yield return edgeUse.StartVertex!;
+            if (edgeUse.Edge.Flags.HasFlag(EdgeFlags.Pole)) continue;
+            yield return edgeUse.StartVertex;
         }
     }
 
@@ -137,7 +138,8 @@ public sealed class Face : BRepEntity
 
         if (EdgeUses.Count == 1)
         {
-            Edge edge = EdgeUses[0].Edge;
+            EdgeUse edgeUse = EdgeUses[0];
+            Edge edge = edgeUse.Edge;
             Curve? curve = edge.Curve;
             if (curve == null) throw new NullReferenceException($"{nameof(curve)} is null");
             switch (curve)
@@ -145,14 +147,16 @@ public sealed class Face : BRepEntity
                 case Circle circle:
                     {
                         Xyz[] strokePoints = circle.GetStrokePoints(chordHeight);
-                        CoordinateSystem coordinateSystem = circle.Center.GetCoordinateSystem(circle.Normal);
+                        if (!edgeUse.SameSenseAsEdge)
+                            Array.Reverse(strokePoints);
+                        CoordinateSystem coordinateSystem = circle.Center.GetCoordinateSystem(GetNormal(circle.Center));
                         var nodes = new List<Node>(strokePoints.Length);
                         foreach (Xyz point in strokePoints)
                         {
                             Uv uv = coordinateSystem.Convert2d(point);
                             int pointIndex = mesh.Positions.Count;
                             mesh.Positions.Add(point);
-                            mesh.Normals.Add(circle.Normal);
+                            mesh.Normals.Add(GetNormal(point));
                             var node = new Node(pointIndex, uv);
                             nodes.Add(node);
                         }
@@ -182,16 +186,16 @@ public sealed class Face : BRepEntity
                                 Uv[] points2d = cylinder.ProjectCurveToParametricSpace(circle, chordHeight);
                                 if (!edgeUse.SameSenseAsEdge)
                                 {
-                                    // C'est un peu compliqué ici : on doit parcourir les points dans l'ordre inverse, mais on doit aussi
-                                    // démarrer à u = 2 Pi et omettre u = zéro. Donc, on décale les points 2D vers la gauche avec Array.Copy(),
-                                    // puis on ajoute le dernier point de la jointure à la fin.
+                                    // It's a bit complicated here: you have to go through the points in reverse order, but you also have to
+                                    // start at u = 2 Pi and omit u = zero. So we shift the 2D points to the left with Array.Copy(),
+                                    // then add the last point of the seam at the end.
                                     Array.Copy(points2d, 1, points2d, 0, points2d.Length - 1);
                                     EdgeUse previousEdgeUse = GetPreviousEdgeUse(edgeUse);
                                     Uv uv = cylinder.GetParametersAtPoint(previousEdgeUse.EndVertex.Position);
                                     points2d[^1] = new Uv(double.Tau, uv.V);
                                     Array.Reverse(points2d);
 
-                                    // On fait pareil avec les points 3D.
+                                    // We do the same with 3D points.
                                     Array.Copy(points3d, 1, points3d, 0, points3d.Length - 1);
                                     points3d[^1] = previousEdgeUse.EndVertex.Position;
                                     Array.Reverse(points3d);

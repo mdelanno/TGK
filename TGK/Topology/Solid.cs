@@ -203,14 +203,18 @@ public sealed class Solid
         face.Flip();
     }
 
-    public static Solid CreateBox(double sizeX, double sizeY = 0, double sizeZ = 0)
+    public static Solid CreateBox(double size)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(size);
+
+        return CreateBox(size, size, size);
+    }
+
+    public static Solid CreateBox(double sizeX, double sizeY, double sizeZ)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sizeX);
-        ArgumentOutOfRangeException.ThrowIfNegative(sizeY);
-        ArgumentOutOfRangeException.ThrowIfNegative(sizeZ);
-
-        if (sizeY == 0) sizeY = sizeX;
-        if (sizeZ == 0) sizeZ = sizeX;
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sizeY);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sizeZ);
 
         var solid = new Solid();
         double x = sizeX / 2;
@@ -234,7 +238,7 @@ public sealed class Solid
         return edge;
     }
 
-    public Face AddCircularFace(Xyz origin, double radius, Xyz normal)
+    Face AddCircularFace(Xyz origin, double radius, Xyz normal)
     {
         var circle = new Circle(origin, radius, normal);
         Edge edge = AddCircularEdge(circle);
@@ -254,5 +258,46 @@ public sealed class Solid
         Face face = solid.AddCircularFace(Xyz.Zero, radius, Xyz.ZAxis);
         solid.Extrude(face, new Xyz(0, 0, height));
         return solid;
+    }
+
+    public static Solid CreateSphere(double radius)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
+
+        var solid = new Solid();
+        Face face = solid.AddSphericalFace(Xyz.Zero, radius);
+        return solid;
+    }
+
+    Face AddSphericalFace(Xyz center, double radius)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
+
+        var face = new Face(Faces.Count, new Sphere(center, radius));
+        Faces.Add(face);
+
+        // Start by creating the vertices.
+        var southPole = new Vertex(Vertices.Count, center - Xyz.ZAxis * radius);
+        Vertices.Add(southPole);
+
+        var northPole = new Vertex(Vertices.Count, center + Xyz.ZAxis * radius);
+        Vertices.Add(northPole);
+
+        var southPoleEdge = new Edge(Edges.Count, southPole, southPole, flags: EdgeFlags.Pole);
+        Edges.Add(southPoleEdge);
+        face.AddEdgeUse(southPoleEdge);
+
+        var circle = new Circle(center, radius, Xyz.YAxis);
+        var seam = new Edge(Edges.Count, southPole, northPole, circle);
+
+        face.AddEdgeUse(seam);
+
+        var northPoleEdge = new Edge(Edges.Count, northPole, northPole, flags: EdgeFlags.Pole);
+        Edges.Add(northPoleEdge);
+        face.AddEdgeUse(northPoleEdge);
+
+        face.AddEdgeUse(seam, sameSenseAsEdge: false);
+
+        return face;
     }
 }

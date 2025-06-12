@@ -16,6 +16,6 @@ sealed class Node
 
     public override string ToString()
     {
-        return $"{ParametricSpacePosition} → {WorldPositionIndex}";
+        return $"{ParametricSpacePosition} ↔ {WorldPositionIndex}";
     }
 }
