@@ -16,20 +16,20 @@ using VerifyTests;
 namespace TGK.Tests.FaceterServices;
 
 [TestFixture]
-[TestOf(typeof(Faceter))]
-public class FaceterTest
+[TestOf(typeof(Mesh))]
+public class MeshTest
 {
-    static FaceterTest()
+    static MeshTest()
     {
         FileExtensions.AddTextExtension("dxf");
-        VerifierSettings.UseUtf8NoBom();
     }
 
     [Test]
     public void TestCube()
     {
         var cube = Solid.CreateBox(2, 2, 2);
-        Mesh mesh = Faceter.FacetSolid(cube, chordHeight: 0.1);
+        var mesh = new Mesh(chordHeight: 0.1);
+        mesh.AddSolid(cube);
 
         // 4 vertices per face, 6 faces = 24 vertices. We cannot share vertices between faces because the normal directions differ.
         Assert.That(mesh.Positions, Has.Count.EqualTo(24), "Expected 24 vertices for the cube mesh.");
@@ -70,7 +70,8 @@ public class FaceterTest
         faceInXZ.AddEdgeUse(e5);
         faceInXZ.AddEdgeUse(e6);
 
-        Mesh mesh = Faceter.FacetSolid(solid, chordHeight: 0.1);
+        var mesh = new Mesh(chordHeight: 0.1);
+        mesh.AddSolid(solid);
 
         // 4 vertices for the XY face, 4 vertices for the XZ face = 8 vertices.
         Assert.That(mesh.Positions, Has.Count.EqualTo(8), "Expected 8 vertices for the L-shape mesh.");
@@ -89,7 +90,8 @@ public class FaceterTest
     public Task TestCylinder()
     {
         var cylinder = Solid.CreateCylinder(radius: 10, height: 20);
-        Mesh mesh = Faceter.FacetSolid(cylinder, chordHeight: 0.1);
+        var mesh = new Mesh(chordHeight: 0.1);
+        mesh.AddSolid(cylinder);
         var writer = new StringWriter(CultureInfo.InvariantCulture);
         var dxfWriter = new DxfWriter(writer);
 

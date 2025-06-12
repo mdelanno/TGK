@@ -659,7 +659,8 @@ public sealed class MainViewModel : ObservableObject
         if (_solid == null) throw new NullReferenceException($"{nameof(_solid)} is null.");
 
         var builder = new MeshBuilder();
-        Mesh mesh = Faceter.FacetSolid(_solid, ChordHeightInWorldUnits);
+        var mesh = new Mesh(ChordHeightInWorldUnits);
+        mesh.AddSolid(_solid);
         builder.Positions!.AddRange(mesh.Positions.Select(p => p.ToVector3()));
         foreach (int[] indices in mesh.TriangleIndices.Values) builder.TriangleIndices!.AddRange(indices);
         builder.Normals!.AddRange(mesh.Normals.Select(n => n.ToVector3()));

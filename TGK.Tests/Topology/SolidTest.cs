@@ -16,7 +16,6 @@ public class SolidTest
     static SolidTest()
     {
         FileExtensions.AddTextExtension("dxf");
-        VerifierSettings.UseUtf8NoBom();
     }
 
     [Test]

@@ -24,7 +24,6 @@ public class FaceTest
     static FaceTest()
     {
         FileExtensions.AddTextExtension("dxf");
-        VerifierSettings.UseUtf8NoBom();
     }
 
     [Test]
@@ -38,8 +37,8 @@ public class FaceTest
             new Xyz(1, 0, 0),
             new Xyz(0, 1, 0),
         ]);
-        var mesh = new Mesh();
-        List<Node> nodes = face.ProjectBoundaryToParameterSpace(mesh, 0.1);
+        var mesh = new Mesh(chordHeight: 0.1);
+        List<Node> nodes = mesh.ProjectBoundaryToParameterSpace(face);
         Assert.That(nodes, Has.Count.EqualTo(3), "Expected 3 nodes for the triangular face.");
         Assert.That(nodes.Select(n => n.WorldPositionIndex), Is.EquivalentTo([0, 1, 2]));
     }
@@ -48,12 +47,14 @@ public class FaceTest
     public void TestProjectBoundaryToParameterSpaceBox()
     {
         var cube = Solid.CreateBox(2, 2, 2);
-        var mesh = new Mesh();
-        List<Node> nodes0 = cube.Faces.First().ProjectBoundaryToParameterSpace(mesh, 0.1);
+        Face firstFace = cube.Faces.First();
+        var mesh = new Mesh(chordHeight: 0.1);
+        List<Node> nodes0 = mesh.ProjectBoundaryToParameterSpace(firstFace);
         Assert.That(nodes0, Has.Count.EqualTo(4), "Expected 4 nodes for the first face of the cube.");
         Assert.That(nodes0.Select(n => n.WorldPositionIndex), Is.EquivalentTo([0, 1, 2, 3]));
 
-        List<Node> nodes1 = cube.Faces.ElementAt(1).ProjectBoundaryToParameterSpace(mesh, 0.1);
+        Face secondFace = cube.Faces.ElementAt(1);
+        List<Node> nodes1 = mesh.ProjectBoundaryToParameterSpace(secondFace);
         Assert.That(nodes1, Has.Count.EqualTo(4), "Expected 4 nodes for the second face of the cube.");
         Assert.That(nodes1.Select(n => n.WorldPositionIndex), Is.EquivalentTo([4, 5, 6, 7]));
 
@@ -70,8 +71,8 @@ public class FaceTest
     {
         var cylinder = Solid.CreateCylinder(radius: 10, height: 20);
         Face cylindricFace = cylinder.Faces.Single(f => f.Surface is Cylinder);
-        var mesh = new Mesh();
-        List<Node> nodes = cylindricFace.ProjectBoundaryToParameterSpace(mesh, 0.1);
+        var mesh = new Mesh(chordHeight: 0.1);
+        List<Node> nodes = mesh.ProjectBoundaryToParameterSpace(cylindricFace);
         return VerifyNodes(nodes);
     }
 

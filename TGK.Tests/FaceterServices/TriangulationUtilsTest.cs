@@ -1,15 +1,10 @@
 ﻿using EmptyFiles;
 using NUnit.Framework;
-using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
 using System.Threading.Tasks;
-using TGK.Dxf;
 using TGK.FaceterServices;
 using TGK.Geometry;
 using TGK.Topology;
-using VerifyNUnit;
 using VerifyTests;
 
 namespace TGK.Tests.FaceterServices;
@@ -21,7 +16,6 @@ public class TriangulationUtilsTest
     static TriangulationUtilsTest()
     {
         FileExtensions.AddTextExtension("dxf");
-        VerifierSettings.UseUtf8NoBom();
     }
 
     [Test]
@@ -83,7 +77,8 @@ public class TriangulationUtilsTest
             new Xyz(0, 4, 0)
         ]);
 
-        List<Node> nodes = face.ProjectBoundaryToParameterSpace(new Mesh(), 0.1);
+        var mesh = new Mesh(chordHeight: 0.1);
+        List<Node> nodes = mesh.ProjectBoundaryToParameterSpace(face);
         var polygon = new NodeListAdapter();
         polygon.Set(nodes);
         int[] triangleIndices = TriangulationUtils.EarClipping(polygon);
