@@ -3,7 +3,7 @@ using TGK.Geometry.Surfaces;
 
 namespace TGK.Geometry;
 
-public class OverlapCurveSurfaceIntersectionResult : CurveSurfaceIntersectionResult
+public sealed class OverlapCurveSurfaceIntersectionResult : CurveSurfaceIntersectionResult
 {
     public Curve Curve { get; }
 

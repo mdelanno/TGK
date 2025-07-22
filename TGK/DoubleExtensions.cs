@@ -41,16 +41,6 @@ public static class DoubleExtensions
         return Max(min, Min(max, value));
     }
 
-    public static double DegreesToRadians(this double degrees)
-    {
-        return degrees * PI / 180;
-    }
-
-    public static double RadiansToDegrees(this double radians)
-    {
-        return radians * 180 / PI;
-    }
-
     /// <summary>
     /// Get the next greatest double value.
     /// </summary>

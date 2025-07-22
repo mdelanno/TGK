@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using TGK.FaceterServices;
 using TGK.Geometry;
 using TGK.Topology;
-using VerifyTests;
 
 namespace TGK.Tests.FaceterServices;
 
@@ -78,7 +77,7 @@ public class TriangulationUtilsTest
         ]);
 
         var mesh = new Mesh(chordHeight: 0.1);
-        List<Node> nodes = mesh.ProjectBoundaryToParameterSpace(face);
+        List<Node> nodes = mesh.ProjectFaceBoundaryToParameterSpace(face);
         var polygon = new NodeListAdapter();
         polygon.Set(nodes);
         int[] triangleIndices = TriangulationUtils.EarClipping(polygon);

@@ -15,7 +15,7 @@ public class CircleTest
     {
         var center = new Xyz(1, 2, 3);
         const double RADIUS = 4;
-        var circle = new Circle(center, RADIUS, Xyz.ZAxis);
+        var circle = new Circle(center, Xyz.ZAxis, RADIUS);
         Xyz p0 = circle.GetPointAtParameter(0.0);
         Xyz p1 = circle.GetPointAtParameter(PI / 2.0);
         Xyz v0 = center.GetVectorTo(p0);
@@ -30,7 +30,7 @@ public class CircleTest
     {
         var center = new Xyz(1, 2, 3);
         const double RADIUS = 4;
-        var circle = new Circle(center, RADIUS, Xyz.ZAxis);
+        var circle = new Circle(center, Xyz.ZAxis, RADIUS);
         IList<Xyz> points = circle.GetStrokePoints(0.1, 0, PI / 2);
 
         var expected0 = new Xyz(5, 2, 3);

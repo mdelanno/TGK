@@ -11,4 +11,6 @@ public abstract class Curve
     public abstract double GetParameterAtPoint(Xyz point);
 
     public abstract double GetDistanceTo(Xyz point);
+
+    public abstract Xyz[] GetStrokePoints(double chordHeight);
 }

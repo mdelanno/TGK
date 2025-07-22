@@ -1,5 +1,6 @@
 ﻿using EmptyFiles;
 using NUnit.Framework;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -11,7 +12,6 @@ using TGK.Geometry;
 using TGK.Geometry.Surfaces;
 using TGK.Topology;
 using VerifyNUnit;
-using VerifyTests;
 
 namespace TGK.Tests.FaceterServices;
 
@@ -92,9 +92,45 @@ public class MeshTest
         var cylinder = Solid.CreateCylinder(radius: 10, height: 20);
         var mesh = new Mesh(chordHeight: 0.1);
         mesh.AddSolid(cylinder);
+        return WriteDxfAndVerify(mesh);
+    }
+
+    [Test]
+    public Task TestProjectSphericalFaceBoundaryToParameterSpace()
+    {
+        var sphere = Solid.CreateSphere(radius: 10);
+        var mesh = new Mesh(chordHeight: 0.1);
+        List<Node> nodes = mesh.ProjectFaceBoundaryToParameterSpace(sphere.Faces.First());
         var writer = new StringWriter(CultureInfo.InvariantCulture);
         var dxfWriter = new DxfWriter(writer);
+        foreach (Node node in nodes)
+        {
+            var point = new Point
+            {
+                Location = node.ParametricSpacePosition.ToXyz()
+            };
+            dxfWriter.Entities.Add(point);
+        }
+        dxfWriter.Write();
+        string dxf = writer.ToString();
+        return Verifier.Verify(dxf, extension: "dxf");
+    }
 
+    [Test]
+    public Task TestSphere()
+    {
+        var sphere = Solid.CreateSphere(radius: 10);
+        var mesh = new Mesh(chordHeight: 0.1);
+        mesh.AddSolid(sphere);
+        return WriteDxfAndVerify(mesh);
+    }
+
+    static Task WriteDxfAndVerify(Mesh mesh)
+    {
+        ArgumentNullException.ThrowIfNull(mesh);
+
+        var writer = new StringWriter(CultureInfo.InvariantCulture);
+        var dxfWriter = new DxfWriter(writer);
         foreach ((Face face, int[] indices) in mesh.TriangleIndices)
         {
             for (int i = 0; i < indices!.Length; i += 3)

@@ -1,11 +1,12 @@
-﻿using TGK.Geometry;
-using TGK.Geometry.Curves;
+﻿using TGK.Geometry.Curves;
 
 namespace TGK.Topology;
 
 public sealed class Edge : BRepEntity
 {
     readonly List<EdgeUse> _uses = [];
+
+    readonly EdgeFlags _flags;
 
     /// <remarks>
     /// Null if the edge is straight or if it is a pole edge.
@@ -18,9 +19,9 @@ public sealed class Edge : BRepEntity
 
     internal IReadOnlyList<EdgeUse> Uses { get; }
 
-    public EdgeFlags Flags { get; }
+    public bool IsSeam => _flags.HasFlag(EdgeFlags.Seam);
 
-    public Curve GetCurve() => Curve ?? new Line(StartVertex!.Position, StartVertex.Position.GetVectorTo(EndVertex!.Position).ToUnit());
+    public bool IsPole => _flags.HasFlag(EdgeFlags.Pole);
 
     /// <summary>
     /// Constructor.
@@ -46,8 +47,10 @@ public sealed class Edge : BRepEntity
             EndVertex.AddEdgeInternal(this);
 
         Curve = curve;
-        Flags = flags;
+        _flags = flags;
     }
+
+    public Curve GetCurve() => Curve ?? new Line(StartVertex!.Position, StartVertex.Position.GetVectorTo(EndVertex!.Position).ToUnit());
 
     internal void AddUseInternal(EdgeUse edgeUse)
     {

@@ -6,6 +6,9 @@ static class TriangulationUtils
 {
     public static int[] EarClipping(IPolygonForTriangulation polygon, double tolerance = 1e-10)
     {
+        ArgumentNullException.ThrowIfNull(polygon);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(tolerance);
+
         int numberOfVertices = polygon.VerticesCount;
         // ReSharper disable once ConvertIfStatementToSwitchStatement
         if (numberOfVertices < 3) throw new ArgumentException("Polygon must have at least 3 vertices.", nameof(polygon));

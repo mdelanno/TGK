@@ -23,7 +23,67 @@ public sealed class Cylinder : Surface
 
     public override IEnumerable<CurveSurfaceIntersectionResult> IntersectWith(Line line, double tolerance = 1e-10)
     {
-        throw new NotImplementedException();
+        ArgumentNullException.ThrowIfNull(line);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(tolerance);
+
+        // Transform line to cylinder coordinate system
+        Xyz lineOrigin = line.Origin;
+        Xyz lineDirection = line.Direction;
+        Xyz axisOrigin = Axis.Origin;
+        Xyz axisDirection = Axis.Direction;
+
+        // Vector from axis origin to line origin
+        Xyz w = axisOrigin.GetVectorTo(lineOrigin);
+
+        // Project line direction and w onto plane perpendicular to cylinder axis
+        Xyz lineDirectionProj = lineDirection - axisDirection * lineDirection.DotProduct(axisDirection);
+        Xyz wProj = w - axisDirection * w.DotProduct(axisDirection);
+
+        // Solve quadratic equation: |lineDirectionProj * t + wProj|² = R²
+        double a = lineDirectionProj.LengthSquared;
+        double b = 2.0 * lineDirectionProj.DotProduct(wProj);
+        double c = wProj.LengthSquared - Radius * Radius;
+
+        double discriminant = b * b - 4 * a * c;
+
+        if (discriminant < 0)
+        {
+            // No intersection
+            yield break;
+        }
+
+        if (Abs(a) < tolerance)
+        {
+            // Line is parallel to cylinder axis
+            if (Abs(c) < tolerance)
+            {
+                // Line is on the cylinder surface
+                yield return new OverlapCurveSurfaceIntersectionResult(line, this, Interval1d.Unbounded);
+            }
+            // Otherwise no intersection
+            yield break;
+        }
+
+        if (discriminant.IsAlmostEqualTo(0, tolerance))
+        {
+            // One intersection point (tangent)
+            double t = -b / (2 * a);
+            Xyz point = line.GetPointAtParameter(t);
+            yield return new PointCurveSurfaceIntersectionResult(line, this, point);
+        }
+        else
+        {
+            // Two intersection points
+            double sqrtDiscriminant = Sqrt(discriminant);
+            double t1 = (-b - sqrtDiscriminant) / (2 * a);
+            double t2 = (-b + sqrtDiscriminant) / (2 * a);
+
+            Xyz point1 = line.GetPointAtParameter(t1);
+            Xyz point2 = line.GetPointAtParameter(t2);
+
+            yield return new PointCurveSurfaceIntersectionResult(line, this, point1);
+            yield return new PointCurveSurfaceIntersectionResult(line, this, point2);
+        }
     }
 
     public override Xyz GetNormal(in Xyz point)
@@ -60,14 +120,11 @@ public sealed class Cylinder : Surface
     /// </remarks>
     internal override Uv[] ProjectCurveToParametricSpace(Curve curve, double chordHeight)
     {
-        switch (curve)
+        return curve switch
         {
-            case Circle circle:
-                return ProjectCircleToParameterSpace(circle, chordHeight);
-
-            default:
-                throw new NotImplementedException("Only Circle curves are supported for projection to parameter space.");
-        }
+            Circle circle => ProjectCircleToParameterSpace(circle, chordHeight),
+            _ => throw new NotImplementedException("Only Circle curves are supported for projection to parameter space.")
+        };
     }
 
     Uv[] ProjectCircleToParameterSpace(Circle circle, double chordHeight)
@@ -89,5 +146,10 @@ public sealed class Cylinder : Surface
     public override void TranslateBy(in Xyz translateVector)
     {
         Axis.TranslateBy(translateVector);
+    }
+
+    public override Interval2d GetDomain()
+    {
+        return new Interval2d(0, double.Tau, double.NegativeInfinity, double.PositiveInfinity);
     }
 }

@@ -1,4 +1,4 @@
-﻿<Window x:Class="TGK.Viewer.MainWindow"
+﻿<Window x:Class="TGK.Viewer.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -6,8 +6,16 @@
         xmlns:hx="http://helix-toolkit.org/wpf/SharpDX"
         xmlns:viewModels="clr-namespace:TGK.Viewer.ViewModels"
         xmlns:viewer="clr-namespace:TGK.Viewer"
+        xmlns:controls="clr-namespace:TGK.Viewer.Controls"
         mc:Ignorable="d" d:DataContext="{d:DesignInstance Type=viewModels:MainViewModel, IsDesignTimeCreatable=False}"
         Title="Tiny Geometric Kernel Viewer" Height="768" Width="1024">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../Styles/TreeViewStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -50,14 +58,35 @@
         </Menu>
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="250" />
+                <ColumnDefinition Width="Auto"/> <!-- Splitter -->
                 <ColumnDefinition />
-                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/> <!-- Splitter -->
                 <ColumnDefinition Width="{Binding ParametricSpacePaneColumnWidth}"/>
             </Grid.ColumnDefinitions>
-            <hx:Viewport3DX x:Name="viewport3Dx"  Orthographic="True" ZoomAroundMouseDownPoint="True" MSAA="Maximum" ModelUpDirection="0 0 1"
+            <!-- Model Tree Panel -->
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="Model Explorer" FontWeight="Bold" Margin="5" />
+                <controls:MultiSelectTreeView x:Name="modelTreeView" Grid.Row="1" ItemsSource="{Binding ModelTreeItems}" Margin="5"
+                                              ItemContainerStyle="{StaticResource MultiSelectTreeViewItemStyle}"
+                                              SelectedItems="{Binding SelectedTreeItems}">
+                    <controls:MultiSelectTreeView.ItemTemplate>
+                        <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                            <TextBlock Text="{Binding DisplayName}" />
+                        </HierarchicalDataTemplate>
+                    </controls:MultiSelectTreeView.ItemTemplate>
+                </controls:MultiSelectTreeView>
+            </Grid>
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch" ShowsPreview="True"/>
+            <hx:Viewport3DX Grid.Column="2" x:Name="viewport3Dx"  Orthographic="True" ZoomAroundMouseDownPoint="True" MSAA="Maximum" ModelUpDirection="0 0 1"
                             ViewCubeVerticalPosition="0.8" IsViewCubeMoverEnabled="False" Title="3D space"
                             EffectsManager="{Binding EffectsManager}" ShowCoordinateSystem="True"
-                            Camera="{Binding Camera}" EnableDesignModeRendering="False">
+                            Camera="{Binding Camera}" EnableDesignModeRendering="False"
+                            MouseDown="Viewport3Dx_MouseDown">
                 <hx:Viewport3DX.InputBindings>
                     <MouseBinding Command="{x:Static hx:ViewportCommands.Rotate}" MouseAction="RightClick" />
                     <MouseBinding Command="{x:Static hx:ViewportCommands.Pan}" MouseAction="MiddleClick" />
@@ -65,8 +94,8 @@
                 </hx:Viewport3DX.InputBindings>
                 <hx:Element3DPresenter Content="{Binding ModelSpaceRootSceneNode}" />
             </hx:Viewport3DX>
-            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch" ShowsPreview="True"/>
-            <Grid Grid.Column="2">
+            <GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch" ShowsPreview="True"/>
+            <Grid Grid.Column="4">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition />

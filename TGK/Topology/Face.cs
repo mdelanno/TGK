@@ -1,5 +1,4 @@
-﻿using TGK.FaceterServices;
-using TGK.Geometry;
+﻿using TGK.Geometry;
 using TGK.Geometry.Curves;
 using TGK.Geometry.Surfaces;
 using static System.Math;
@@ -42,7 +41,7 @@ public sealed class Face : BRepEntity
     {
         foreach (EdgeUse edgeUse in EdgeUses)
         {
-            if (edgeUse.Edge.Flags.HasFlag(EdgeFlags.Pole)) continue;
+            if (edgeUse.Edge.IsPole) continue;
             yield return edgeUse.StartVertex;
         }
     }

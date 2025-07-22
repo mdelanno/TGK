@@ -103,7 +103,7 @@ public sealed class Plane : Surface
     }
 
     [Obsolete("Use GetParametersAtPoint instead.")]
-    public override IEnumerable<Uv> GetParametersAtPoints(IEnumerable<Xyz> points)
+    public IEnumerable<Uv> GetParametersAtPoints(IEnumerable<Xyz> points)
     {
         foreach (Xyz point in points)
             yield return CoordinateSystem.Convert2d(point);
@@ -117,5 +117,10 @@ public sealed class Plane : Surface
     public override void TranslateBy(in Xyz translateVector)
     {
         CoordinateSystem.TranslateBy(translateVector);
+    }
+
+    public override Interval2d GetDomain()
+    {
+        return Interval2d.Unbounded;
     }
 }

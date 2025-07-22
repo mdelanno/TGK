@@ -41,6 +41,11 @@ public sealed class Line : Curve
         return Math.Abs(signedDistance);
     }
 
+    public override Xyz[] GetStrokePoints(double chordHeight)
+    {
+        throw new NotSupportedException();
+    }
+
     public bool IsParallelTo(Line other)
     {
         ArgumentNullException.ThrowIfNull(other);

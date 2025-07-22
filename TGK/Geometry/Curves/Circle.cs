@@ -14,7 +14,7 @@ public sealed class Circle : Curve, IClosedCurve
 
     public Xyz ReferenceVector => Normal.GetPerpendicularDirection();
 
-    public Circle(Xyz center, double radius, Xyz normal)
+    public Circle(Xyz center, Xyz normal, double radius)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
 
@@ -30,10 +30,10 @@ public sealed class Circle : Curve, IClosedCurve
 
     public override Circle Clone()
     {
-        return new Circle(Center, Radius, Normal);
+        return new Circle(Center, Normal, Radius);
     }
 
-    public Xyz[] GetStrokePoints(double chordHeight)
+    public override Xyz[] GetStrokePoints(double chordHeight)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(chordHeight);
 

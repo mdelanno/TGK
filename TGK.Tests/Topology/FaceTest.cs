@@ -10,10 +10,8 @@ using TGK.Dxf;
 using TGK.FaceterServices;
 using TGK.Geometry;
 using TGK.Geometry.Surfaces;
-using TGK.Tests.FaceterServices;
 using TGK.Topology;
 using VerifyNUnit;
-using VerifyTests;
 
 namespace TGK.Tests.Topology;
 
@@ -38,7 +36,7 @@ public class FaceTest
             new Xyz(0, 1, 0),
         ]);
         var mesh = new Mesh(chordHeight: 0.1);
-        List<Node> nodes = mesh.ProjectBoundaryToParameterSpace(face);
+        List<Node> nodes = mesh.ProjectFaceBoundaryToParameterSpace(face);
         Assert.That(nodes, Has.Count.EqualTo(3), "Expected 3 nodes for the triangular face.");
         Assert.That(nodes.Select(n => n.WorldPositionIndex), Is.EquivalentTo([0, 1, 2]));
     }
@@ -49,12 +47,12 @@ public class FaceTest
         var cube = Solid.CreateBox(2, 2, 2);
         Face firstFace = cube.Faces.First();
         var mesh = new Mesh(chordHeight: 0.1);
-        List<Node> nodes0 = mesh.ProjectBoundaryToParameterSpace(firstFace);
+        List<Node> nodes0 = mesh.ProjectFaceBoundaryToParameterSpace(firstFace);
         Assert.That(nodes0, Has.Count.EqualTo(4), "Expected 4 nodes for the first face of the cube.");
         Assert.That(nodes0.Select(n => n.WorldPositionIndex), Is.EquivalentTo([0, 1, 2, 3]));
 
         Face secondFace = cube.Faces.ElementAt(1);
-        List<Node> nodes1 = mesh.ProjectBoundaryToParameterSpace(secondFace);
+        List<Node> nodes1 = mesh.ProjectFaceBoundaryToParameterSpace(secondFace);
         Assert.That(nodes1, Has.Count.EqualTo(4), "Expected 4 nodes for the second face of the cube.");
         Assert.That(nodes1.Select(n => n.WorldPositionIndex), Is.EquivalentTo([4, 5, 6, 7]));
 
@@ -72,7 +70,7 @@ public class FaceTest
         var cylinder = Solid.CreateCylinder(radius: 10, height: 20);
         Face cylindricFace = cylinder.Faces.Single(f => f.Surface is Cylinder);
         var mesh = new Mesh(chordHeight: 0.1);
-        List<Node> nodes = mesh.ProjectBoundaryToParameterSpace(cylindricFace);
+        List<Node> nodes = mesh.ProjectFaceBoundaryToParameterSpace(cylindricFace);
         return VerifyNodes(nodes);
     }
 

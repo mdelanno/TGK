@@ -1,6 +1,5 @@
 ﻿using SharpDX;
 using TGK.Geometry;
-using TGK.Topology;
 
 namespace TGK.Viewer;
 

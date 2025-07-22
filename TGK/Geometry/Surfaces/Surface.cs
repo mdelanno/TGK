@@ -12,17 +12,7 @@ public abstract class Surface : Entity3d
 
     public abstract Uv GetParametersAtPoint(in Xyz point);
 
-    /// <summary>
-    /// Use this method to get the parameters at multiple points on the surface
-    /// (it's more efficient than calling <see cref="GetParametersAtPoint"/> for each point).
-    /// </summary>
-    /// <param name="points"></param>
-    /// <returns></returns>
-    public virtual IEnumerable<Uv> GetParametersAtPoints(IEnumerable<Xyz> points)
-    {
-        foreach (Xyz point in points)
-            yield return GetParametersAtPoint(point);
-    }
+    public abstract Interval2d GetDomain();
 
     internal abstract Uv[] ProjectCurveToParametricSpace(Curve curve, double chordHeight);
 }

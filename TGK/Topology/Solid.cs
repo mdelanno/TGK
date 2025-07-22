@@ -1,9 +1,6 @@
-﻿using System.Diagnostics;
-using TGK.FaceterServices;
-using TGK.Geometry;
+﻿using TGK.Geometry;
 using TGK.Geometry.Curves;
 using TGK.Geometry.Surfaces;
-using static TGK.FaceterServices.TriangulationUtils;
 
 namespace TGK.Topology;
 
@@ -99,7 +96,7 @@ public sealed class Solid
                 case Circle circle:
                     {
                         // Create the opposite face edge as a circle.
-                        Curve oppositeCircle = new Circle(circle.Center + extrusionVector, circle.Radius, circle.Normal);
+                        Curve oppositeCircle = new Circle(circle.Center + extrusionVector, circle.Normal, circle.Radius);
                         var axis = new Line(circle.Center, extrusionVector.ToUnit());
                         var cylinder = new Cylinder(axis, circle.Radius);
                         var sideFace = new Face(Faces.Count, cylinder);
@@ -240,7 +237,7 @@ public sealed class Solid
 
     Face AddCircularFace(Xyz origin, double radius, Xyz normal)
     {
-        var circle = new Circle(origin, radius, normal);
+        var circle = new Circle(origin, normal, radius);
         Edge edge = AddCircularEdge(circle);
         Plane surface = circle.GetPlane();
         var face = new Face(Faces.Count, surface);
@@ -265,7 +262,7 @@ public sealed class Solid
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
 
         var solid = new Solid();
-        Face face = solid.AddSphericalFace(Xyz.Zero, radius);
+        solid.AddSphericalFace(Xyz.Zero, radius);
         return solid;
     }
 
@@ -287,7 +284,7 @@ public sealed class Solid
         Edges.Add(southPoleEdge);
         face.AddEdgeUse(southPoleEdge);
 
-        var circle = new Circle(center, radius, Xyz.YAxis);
+        var circle = new Circle(center, Xyz.YAxis, radius);
         var seam = new Edge(Edges.Count, southPole, northPole, circle);
 
         face.AddEdgeUse(seam);

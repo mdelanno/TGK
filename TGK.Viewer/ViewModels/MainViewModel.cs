@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.Input;
+ ﻿using CommunityToolkit.Mvvm.Input;
 using Cyotek.Drawing.BitmapFont;
 using HelixToolkit.SharpDX.Core;
 using HelixToolkit.SharpDX.Core.Model;
@@ -7,6 +7,7 @@ using HelixToolkit.Wpf.SharpDX;
 using SharpDX;
 using SharpDX.Direct3D11;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Media.Media3D;
 using TGK.FaceterServices;
@@ -14,8 +15,10 @@ using TGK.Geometry;
 using TGK.Geometry.Curves;
 using TGK.Topology;
 using Camera = HelixToolkit.Wpf.SharpDX.Camera;
+using Color = SharpDX.Color;
 using DiffuseMaterial = HelixToolkit.Wpf.SharpDX.DiffuseMaterial;
 using EffectsManager = HelixToolkit.SharpDX.Core.EffectsManager;
+using HitTestResult = HelixToolkit.SharpDX.Core.HitTestResult;
 using ObservableObject = CommunityToolkit.Mvvm.ComponentModel.ObservableObject;
 using OrthographicCamera = HelixToolkit.Wpf.SharpDX.OrthographicCamera;
 using PointFigure = HelixToolkit.SharpDX.Core.PointFigure;
@@ -27,6 +30,7 @@ public sealed class MainViewModel : ObservableObject
     readonly BitmapFont _flamaFont;
 
     readonly IView _view;
+
 
     Solid? _solid;
 
@@ -63,6 +67,10 @@ public sealed class MainViewModel : ObservableObject
     bool _geometryChanged;
 
     Edge? _selectedEdge;
+
+    public ObservableCollection<ModelTreeItem> ModelTreeItems { get; } = [];
+    
+    public ObservableCollection<ModelTreeItem> SelectedTreeItems { get; } = [];
 
     public bool ShowVertices
     {
@@ -180,6 +188,8 @@ public sealed class MainViewModel : ObservableObject
 
     public RelayCommand LinePlaneIntersectionCommand { get; }
 
+    public RelayCommand<System.Windows.Point?> SelectEntityCommand { get; }
+
     public EffectsManager EffectsManager { get; } = new DefaultEffectsManager();
 
     public SceneNodeGroupModel3D ModelSpaceRootSceneNode { get; } = new();
@@ -221,6 +231,8 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public RelayCommand CloseParametricSpacePaneCommand { get; }
+
+    public RelayCommand ClearSelectionCommand { get; }
 
     public GridLength ParametricSpacePaneColumnWidth
     {
@@ -283,6 +295,8 @@ public sealed class MainViewModel : ObservableObject
         Zoom1_1Command = new RelayCommand(Zoom1_1);
 
         CloseParametricSpacePaneCommand = new RelayCommand(HideParametricSpacePane);
+        ClearSelectionCommand = new RelayCommand(ClearAllSelections);
+        SelectEntityCommand = new RelayCommand<System.Windows.Point?>(SelectEntityAt3D);
     }
 
     void Zoom1_1()
@@ -339,7 +353,7 @@ public sealed class MainViewModel : ObservableObject
         Vertex end = _solid.AddVertex(new Xyz(6, 5, 4));
         _solid.AddEdge(start, end);
 
-        var circle = new Circle(new Xyz(12, 10, 7), 2.5, Xyz.ZAxis);
+        var circle = new Circle(new Xyz(12, 10, 7), Xyz.ZAxis, 2.5);
         _solid.AddCircularEdge(circle);
 
         _geometryChanged = true;
@@ -528,12 +542,11 @@ public sealed class MainViewModel : ObservableObject
 
     void Update()
     {
-        ModelSpaceRootSceneNode.Clear();
-        _faceNormals = null;
-        ParametricSpaceRootSceneNode.Clear();
-
         if (_solid is null)
+        {
+            ModelTreeItems.Clear();
             return;
+        }
 
         if (_geometryChanged)
         {
@@ -543,6 +556,7 @@ public sealed class MainViewModel : ObservableObject
 
         UpdateModelSpace();
         UpdateParametricSpace();
+        UpdateModelTree();
     }
 
     void UpdateParametricSpace()
@@ -552,6 +566,10 @@ public sealed class MainViewModel : ObservableObject
 
     void UpdateModelSpace()
     {
+        ModelSpaceRootSceneNode.Clear();
+        _faceNormals = null;
+        ParametricSpaceRootSceneNode.Clear();
+
         _modelSpaceLabel = null;
         if (ShowVerticesNames) AddNamesToScene();
         if (ShowVertices) AddVerticesToScene();
@@ -583,25 +601,39 @@ public sealed class MainViewModel : ObservableObject
         if (_solid == null) throw new NullReferenceException($"{nameof(_solid)} is null.");
 
         var positions = new Vector3Collection(_solid.Vertices.Count);
+        var colors = new Color4Collection(_solid.Vertices.Count);
+        
         foreach (Vertex vertex in _solid.Vertices)
+        {
             positions.Add(new Vector3((float)vertex.Position.X, (float)vertex.Position.Y, (float)vertex.Position.Z));
+            colors.Add(IsEntitySelected(vertex) ? Color.Blue : Color4.Black);
+        }
+        
         var pointGeometry = new PointGeometry3D
         {
-            Positions = positions
+            Positions = positions,
+            Colors = colors
         };
         var pointMaterial = new PointMaterialCore
         {
-            PointColor = Color4.Black,
             Figure = PointFigure.Rect,
             Height = 5,
-            Width = 5
+            Width = 5,
+            EnableColorBlending = true,
+            BlendingFactor = 1,
+            PointColor = Color4.White
         };
         var pointNode = new PointNode
         {
             Material = pointMaterial,
             Geometry = pointGeometry,
-            DepthBias = -100 // To see the points in front of the triangle faces
+            DepthBias = -100, // To see the points in front of the triangle faces
+            HitTestThickness = 5
         };
+        foreach (Vertex vertex in _solid.Vertices)
+        {
+            vertex.Tag = pointNode;
+        }
         ModelSpaceRootSceneNode.AddNode(pointNode);
 
         if (_modelSpaceLabel != null)
@@ -623,9 +655,9 @@ public sealed class MainViewModel : ObservableObject
     {
         if (_solid == null) throw new NullReferenceException($"{nameof(_solid)} is null.");
 
-        var builder = new LineBuilder();
         foreach (Edge edge in _solid.Edges)
         {
+            var builder = new LineBuilder();
             switch (edge.Curve)
             {
                 case null:
@@ -641,41 +673,49 @@ public sealed class MainViewModel : ObservableObject
                     builder.Add(isClosed: true, strokePoints.Select(p => p.ToVector3()).ToArray());
                     break;
             }
+            var material = new LineMaterialCore
+            {
+                LineColor = IsEntitySelected(edge) ? Color.Blue : Color.Gray
+            };
+            var node = new LineNode
+            {
+                Material = material,
+                Geometry = builder.ToLineGeometry3D()!,
+                HitTestThickness = 5
+            };
+            edge.Tag = node;
+            ModelSpaceRootSceneNode.AddNode(node);
         }
-        var material = new LineMaterialCore
-        {
-            LineColor = Color.Blue
-        };
-        var node = new LineNode
-        {
-            Material = material,
-            Geometry = builder.ToLineGeometry3D()!
-        };
-        ModelSpaceRootSceneNode.AddNode(node);
     }
 
     void AddFacesToScene()
     {
         if (_solid == null) throw new NullReferenceException($"{nameof(_solid)} is null.");
 
-        var builder = new MeshBuilder();
-        var mesh = new Mesh(ChordHeightInWorldUnits);
-        mesh.AddSolid(_solid);
-        builder.Positions!.AddRange(mesh.Positions.Select(p => p.ToVector3()));
-        foreach (int[] indices in mesh.TriangleIndices.Values) builder.TriangleIndices!.AddRange(indices);
-        builder.Normals!.AddRange(mesh.Normals.Select(n => n.ToVector3()));
-        var material = new DiffuseMaterial
+        foreach (Face face in _solid.Faces)
         {
-            DiffuseColor = Color.LightBlue
-        };
-        var node = new MeshNode
-        {
-            Geometry = builder.ToMesh()!,
-            Material = material,
-            RenderWireframe = ShowWireFrame,
-            CullMode = CullMode.Back
-        };
-        ModelSpaceRootSceneNode.AddNode(node);
+            var builder = new MeshBuilder();
+            var mesh = new Mesh(ChordHeightInWorldUnits);
+            var tempSolid = new Solid();
+            tempSolid.Faces.Add(face);
+            mesh.AddSolid(tempSolid);
+            builder.Positions!.AddRange(mesh.Positions.Select(p => p.ToVector3()));
+            foreach (int[] indices in mesh.TriangleIndices.Values) builder.TriangleIndices!.AddRange(indices);
+            builder.Normals!.AddRange(mesh.Normals.Select(n => n.ToVector3()));
+            var material = new DiffuseMaterial
+            {
+                DiffuseColor = IsEntitySelected(face) ? Color.Blue : Color.LightBlue
+            };
+            var node = new MeshNode
+            {
+                Geometry = builder.ToMesh()!,
+                Material = material,
+                RenderWireframe = ShowWireFrame,
+                CullMode = CullMode.Back
+            };
+            face.Tag = node;
+            ModelSpaceRootSceneNode.AddNode(node);
+        }
     }
 
     void AddNamesToScene()
@@ -693,5 +733,300 @@ public sealed class MainViewModel : ObservableObject
             DepthBias = int.MinValue // To see the text in front of the geometry
         };
         ModelSpaceRootSceneNode.AddNode(billboardNode);
+    }
+
+    void UpdateModelTree()
+    {
+        // Sauvegarder les entités sélectionnées
+        var selectedEntities = SelectedTreeItems.Select(item => item.Data).ToHashSet();
+        
+        ModelTreeItems.Clear();
+        
+        if (_solid == null) 
+        {
+            // Si pas de solide, vider aussi les sélections
+            SelectedTreeItems.Clear();
+            return;
+        }
+
+        var newSelectedItems = new List<ModelTreeItem>();
+
+        var rootItem = new ModelTreeItem("Model");
+        ModelTreeItems.Add(rootItem);
+
+        if (_solid.Vertices.Count > 0)
+        {
+            var verticesItem = new ModelTreeItem($"Vertices ({_solid.Vertices.Count})");
+            rootItem.Children.Add(verticesItem);
+
+            foreach (Vertex vertex in _solid.Vertices)
+            {
+                var vertexItem = new ModelTreeItem($"Vertex {vertex.Id}: {vertex.Position}", vertex);
+                verticesItem.Children.Add(vertexItem);
+                
+                // Si cette entité était sélectionnée, l'ajouter à la nouvelle liste
+                if (selectedEntities.Contains(vertex))
+                {
+                    newSelectedItems.Add(vertexItem);
+                    vertexItem.IsSelected = true;
+                }
+            }
+        }
+
+        if (_solid.Edges.Count > 0)
+        {
+            var edgesItem = new ModelTreeItem($"Edges ({_solid.Edges.Count})");
+            rootItem.Children.Add(edgesItem);
+
+            foreach (Edge edge in _solid.Edges)
+            {
+                string edgeDescription = edge.Curve switch
+                {
+                    null => $"Line: {edge.StartVertex.Position} → {edge.EndVertex.Position}",
+                    Circle circle => $"Circle: Center={circle.Center}, Radius={circle.Radius:F2}",
+                    _ => edge.Curve.GetType().Name
+                };
+                var edgeItem = new ModelTreeItem($"Edge {edge.Id}: {edgeDescription}", edge);
+                edgesItem.Children.Add(edgeItem);
+                
+                // Si cette entité était sélectionnée, l'ajouter à la nouvelle liste
+                if (selectedEntities.Contains(edge))
+                {
+                    newSelectedItems.Add(edgeItem);
+                    edgeItem.IsSelected = true;
+                }
+            }
+        }
+
+        if (_solid.Faces.Count > 0)
+        {
+            var facesItem = new ModelTreeItem($"Faces ({_solid.Faces.Count})");
+            rootItem.Children.Add(facesItem);
+
+            foreach (Face face in _solid.Faces)
+            {
+                string surfaceDescription = face.Surface.GetType().Name;
+                var faceItem = new ModelTreeItem($"Face {face.Id}: {surfaceDescription}", face);
+                facesItem.Children.Add(faceItem);
+                
+                // Si cette entité était sélectionnée, l'ajouter à la nouvelle liste
+                if (selectedEntities.Contains(face))
+                {
+                    newSelectedItems.Add(faceItem);
+                    faceItem.IsSelected = true;
+                }
+            }
+        }
+        
+        // Synchroniser SelectedTreeItems avec newSelectedItems
+        SynchronizeSelectedItems(newSelectedItems);
+    }
+    
+    void SynchronizeSelectedItems(List<ModelTreeItem> newSelectedItems)
+    {
+        // Supprimer les éléments qui ne sont plus sélectionnés
+        for (int i = SelectedTreeItems.Count - 1; i >= 0; i--)
+        {
+            if (!newSelectedItems.Contains(SelectedTreeItems[i]))
+            {
+                SelectedTreeItems.RemoveAt(i);
+            }
+        }
+        
+        // Ajouter les nouveaux éléments sélectionnés
+        foreach (ModelTreeItem newItem in newSelectedItems)
+        {
+            if (!SelectedTreeItems.Contains(newItem))
+            {
+                SelectedTreeItems.Add(newItem);
+            }
+        }
+        
+        // Mettre à jour les visuels après la synchronisation
+        UpdateSelectionVisuals();
+    }
+
+    void ClearAllSelections()
+    {
+        foreach (ModelTreeItem item in ModelTreeItems)
+        {
+            ClearSelectionRecursively(item);
+        }
+        SelectedTreeItems.Clear();
+        UpdateSelectionVisuals();
+    }
+
+    void SelectEntityAt3D(System.Windows.Point? mousePosition)
+    {
+        if (mousePosition == null || _solid == null) 
+        {
+            ClearAllSelections();
+            return;
+        }
+
+        // Perform hit testing on the 3D viewport
+        IList<HitTestResult>? hits = _view.HitTest(mousePosition.Value);
+        if (hits.Count == 0) 
+        {
+            ClearAllSelections();
+            return;
+        }
+
+        // Find the first hit that corresponds to a TGK entity
+        bool entityFound = false;
+        foreach (HitTestResult hit in hits)
+        {
+            if (hit.ModelHit is SceneNode node)
+            {
+                // Find the corresponding TGK entity
+                object? tgkEntity = FindTgkEntityFromNode(node, hit.Tag);
+                if (tgkEntity != null)
+                {
+                    SelectEntity(tgkEntity);
+                    entityFound = true;
+                    break;
+                }
+            }
+        }
+
+        // If no TGK entity was found, clear selection
+        if (!entityFound)
+        {
+            ClearAllSelections();
+        }
+    }
+
+    object? FindTgkEntityFromNode(SceneNode node, object? hitTag)
+    {
+        // Check if this node corresponds to a vertex
+        foreach ((Vertex v, int i) in _solid!.Vertices.Select((v, i) => (v, i)))
+        {
+            if (v.Tag == node && i == (int)hitTag!) return v;
+        }
+
+        // Check if this node corresponds to an edge
+        foreach (Edge edge in _solid.Edges)
+        {
+            if (edge.Tag == node) return edge;
+        }
+
+        // Check if this node corresponds to a face
+        foreach (Face face in _solid.Faces)
+        {
+            if (face.Tag == node) return face;
+        }
+
+        return null;
+    }
+
+    void SelectEntity(object entity)
+    {
+        // Clear all current selections first
+        ClearAllSelections();
+
+        // Find the corresponding ModelTreeItem
+        ModelTreeItem? itemToSelect = FindModelTreeItem(entity);
+        if (itemToSelect != null)
+        {
+            // Add the new item to selection
+            SelectedTreeItems.Add(itemToSelect);
+            
+            // Update visual selection in the tree
+            itemToSelect.IsSelected = true;
+            
+            // Expand parent nodes to make the selected item visible
+            _view.ExpandParentNodesForSelectedItem(itemToSelect);
+            
+            // Force update of visual selection in 3D view
+            UpdateSelectionVisuals();
+        }
+    }
+
+    ModelTreeItem? FindModelTreeItem(object entity)
+    {
+        foreach (ModelTreeItem rootItem in ModelTreeItems)
+        {
+            ModelTreeItem? found = FindModelTreeItemRecursively(rootItem, entity);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    static ModelTreeItem? FindModelTreeItemRecursively(ModelTreeItem item, object entity)
+    {
+        if (item.Data == entity) return item;
+
+        foreach (ModelTreeItem child in item.Children)
+        {
+            ModelTreeItem? found = FindModelTreeItemRecursively(child, entity);
+            if (found != null) return found;
+        }
+
+        return null;
+    }
+
+    static void ClearSelectionRecursively(ModelTreeItem item)
+    {
+        item.IsSelected = false;
+        foreach (ModelTreeItem child in item.Children)
+        {
+            ClearSelectionRecursively(child);
+        }
+    }
+
+    bool IsEntitySelected(BRepEntity entity)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+
+        return SelectedTreeItems.Any(item => item.Data == entity);
+    }
+
+    void UpdateSelectionVisuals()
+    {
+        UpdateVerticesColors();
+        UpdateEdgeColors();
+        UpdateFaceColors();
+    }
+
+    void UpdateVerticesColors()
+    {
+        if (_solid == null || !ShowVertices) return;
+
+        // Trouver le PointNode des vertices dans la scène
+        PointNode? pointNode = ModelSpaceRootSceneNode.GroupNode!.Items!.OfType<PointNode>().FirstOrDefault();
+
+        if (pointNode == null) return;
+        var geometry = (PointGeometry3D)pointNode.Geometry!;
+        foreach ((Vertex vertex, int i) in _solid.Vertices.Select((vertex, index) => (vertex, index)))
+        {
+            geometry.Colors![i] = IsEntitySelected(vertex) ? Color.Blue : Color4.Black;
+        }
+        geometry.UpdateColors();
+    }
+
+    void UpdateEdgeColors()
+    {
+        if (_solid == null || !ShowEdges) return;
+
+        foreach (Edge edge in _solid.Edges)
+        {
+            if (((MaterialGeometryNode)edge.Tag!).Material is LineMaterialCore material)
+            {
+                material.LineColor = IsEntitySelected(edge) ? Color.Blue : Color.Gray;
+            }
+        }
+    }
+
+    void UpdateFaceColors()
+    {
+        if (_solid == null || !ShowFaces) return;
+
+       foreach (Face face in _solid.Faces)
+        {
+            if (((MaterialGeometryNode)face.Tag!).Material is DiffuseMaterialCore material)
+            {
+                material.DiffuseColor = IsEntitySelected(face) ? Color.Blue : Color.LightBlue;
+            }
+        }
     }
 }
