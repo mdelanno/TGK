@@ -297,6 +297,17 @@ public sealed class MainViewModel : ObservableObject
         CloseParametricSpacePaneCommand = new RelayCommand(HideParametricSpacePane);
         ClearSelectionCommand = new RelayCommand(ClearAllSelections);
         SelectEntityCommand = new RelayCommand<System.Windows.Point?>(SelectEntityAt3D);
+
+        // S'abonner aux changements de sélection dans le TreeView
+        SelectedTreeItems.CollectionChanged += OnSelectedTreeItemsChanged;
+    }
+    
+    void OnSelectedTreeItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        
+        // Mettre à jour les visuels de sélection dans la vue 3D
+        UpdateSelectionVisuals();
     }
 
     void Zoom1_1()
@@ -330,9 +341,6 @@ public sealed class MainViewModel : ObservableObject
 
     void CreateVertex()
     {
-        _solid = null;
-        ShowVertices = true;
-
         _solid = new Solid();
         _solid.AddVertex(new Xyz(1, 2, 3));
 
@@ -345,9 +353,6 @@ public sealed class MainViewModel : ObservableObject
 
     void CreateEdges()
     {
-        _solid = null;
-        ShowEdges = true;
-
         _solid = new Solid();
         Vertex start = _solid.AddVertex(new Xyz(1, 2, 3));
         Vertex end = _solid.AddVertex(new Xyz(6, 5, 4));
@@ -377,10 +382,6 @@ public sealed class MainViewModel : ObservableObject
 
     void CreateFace()
     {
-        _solid = null;
-        ShowFaces = true;
-        ShowWireFrame = true;
-
         _solid = new Solid();
 
         // Draw a T-shape face
@@ -403,10 +404,6 @@ public sealed class MainViewModel : ObservableObject
 
     void CreateBox()
     {
-        _solid = null;
-        ShowFaces = true;
-        ShowWireFrame = false;
-
         _solid = Solid.CreateBox(size: 10);
 
         _geometryChanged = true;
@@ -417,10 +414,6 @@ public sealed class MainViewModel : ObservableObject
 
     void CreateSphere()
     {
-        _solid = null;
-        ShowFaces = true;
-        ShowWireFrame = true;
-
         _solid = Solid.CreateSphere(radius: 10);
 
         _geometryChanged = true;
@@ -431,9 +424,6 @@ public sealed class MainViewModel : ObservableObject
 
     void CreateCylinder()
     {
-        _solid = null;
-        ShowFaces = true;
-
         _solid = Solid.CreateCylinder(radius: 10, height: 20);
         _geometryChanged = true;
 
@@ -444,9 +434,6 @@ public sealed class MainViewModel : ObservableObject
 
     void CreateCone()
     {
-        _solid = null;
-        ShowFaces = true;
-
         _solid = new Solid();
         throw new NotImplementedException();
 
@@ -457,9 +444,6 @@ public sealed class MainViewModel : ObservableObject
 
     void CreateTorus()
     {
-        _solid = null;
-        ShowFaces = true;
-
         _solid = new Solid();
         throw new NotImplementedException();
 
@@ -470,10 +454,6 @@ public sealed class MainViewModel : ObservableObject
 
     void LineLineIntersection()
     {
-        _solid = null;
-        ShowVertices = true;
-        ShowEdges = true;
-
         _solid = new Solid();
         Vertex start0 = _solid.AddVertex(Xyz.Zero);
         Vertex end0 = _solid.AddVertex(new Xyz(24, 24, 24));
@@ -506,11 +486,6 @@ public sealed class MainViewModel : ObservableObject
 
     void LinePlaneIntersection()
     {
-        _solid = null;
-        ShowVertices = true;
-        ShowEdges = true;
-        ShowFaces = true;
-
         _solid = new Solid();
 
         Face face = _solid.AddPlanarFace([new Xyz(-10, -10, 0), new Xyz(10, -10, 0), new Xyz(10, 10, 0), new Xyz(-10, 10, 0)]);
@@ -657,6 +632,7 @@ public sealed class MainViewModel : ObservableObject
 
         foreach (Edge edge in _solid.Edges)
         {
+            if (edge.IsPole) continue;
             var builder = new LineBuilder();
             switch (edge.Curve)
             {
@@ -669,9 +645,20 @@ public sealed class MainViewModel : ObservableObject
                     }
 
                 case Circle circle:
-                    IList<Xyz> strokePoints = circle.GetStrokePoints(ChordHeightInWorldUnits);
-                    builder.Add(isClosed: true, strokePoints.Select(p => p.ToVector3()).ToArray());
-                    break;
+                    {
+                        bool isFullCircle = edge.StartVertex.Position.IsAlmostEqualTo(edge.EndVertex.Position);
+                        IList<Xyz> strokePoints;
+                        if (isFullCircle)
+                            strokePoints = circle.GetStrokePoints(ChordHeightInWorldUnits);
+                        else
+                        {
+                            double startParameter = circle.GetParameterAtPoint(edge.StartVertex.Position);
+                            double endParameter = circle.GetParameterAtPoint(edge.EndVertex.Position);
+                            strokePoints = circle.GetStrokePoints(ChordHeightInWorldUnits, startParameter, endParameter);
+                        }
+                        builder.Add(isClosed: isFullCircle, strokePoints.Select(p => p.ToVector3()).ToArray());
+                        break;
+                    }
             }
             var material = new LineMaterialCore
             {
@@ -780,12 +767,25 @@ public sealed class MainViewModel : ObservableObject
 
             foreach (Edge edge in _solid.Edges)
             {
-                string edgeDescription = edge.Curve switch
+                string edgeDescription;
+                switch (edge.Curve)
                 {
-                    null => $"Line: {edge.StartVertex.Position} → {edge.EndVertex.Position}",
-                    Circle circle => $"Circle: Center={circle.Center}, Radius={circle.Radius:F2}",
-                    _ => edge.Curve.GetType().Name
-                };
+                    case null:
+                        edgeDescription = edge.IsPole
+                            ? $"Pole: {edge.StartVertex.Position}"
+                            : $"Line: {edge.StartVertex.Position} → {edge.EndVertex.Position}";
+                        break;
+
+                    case Circle circle:
+                        edgeDescription = $"Circle: Center={circle.Center}, Radius={circle.Radius:F2}";
+                        break;
+
+                    default:
+                        edgeDescription = edge.Curve.GetType().Name;
+                        break;
+                }
+                if (edge.IsSeam)
+                    edgeDescription += " (seam)";
                 var edgeItem = new ModelTreeItem($"Edge {edge.Id}: {edgeDescription}", edge);
                 edgesItem.Children.Add(edgeItem);
                 
@@ -1010,6 +1010,7 @@ public sealed class MainViewModel : ObservableObject
 
         foreach (Edge edge in _solid.Edges)
         {
+            if (edge.IsPole) continue;
             if (((MaterialGeometryNode)edge.Tag!).Material is LineMaterialCore material)
             {
                 material.LineColor = IsEntitySelected(edge) ? Color.Blue : Color.Gray;

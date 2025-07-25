@@ -285,8 +285,8 @@ public sealed class Solid
         face.AddEdgeUse(southPoleEdge);
 
         var circle = new Circle(center, Xyz.YAxis, radius);
-        var seam = new Edge(Edges.Count, southPole, northPole, circle);
-
+        var seam = new Edge(Edges.Count, southPole, northPole, circle, EdgeFlags.Seam);
+        Edges.Add(seam);
         face.AddEdgeUse(seam);
 
         var northPoleEdge = new Edge(Edges.Count, northPole, northPole, flags: EdgeFlags.Pole);

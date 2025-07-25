@@ -61,6 +61,9 @@ public sealed class Edge : BRepEntity
 
     public override string ToString()
     {
-        return $"e{Id}, {StartVertex} → {EndVertex}";
+        string s = $"e{Id}, {StartVertex} → {EndVertex}";
+        if (IsSeam) s += " (seam)";
+        if (IsPole) s += " (pole)";
+        return s;
     }
 }

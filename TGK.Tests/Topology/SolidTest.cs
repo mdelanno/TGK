@@ -62,5 +62,9 @@ public class SolidTest
         Assert.That(sphericalFace.EdgeUses.Count(eu => !eu.SameSenseAsEdge), Is.EqualTo(1), "Expected 1 edge uses in the opposite sense as the edge.");
         IEnumerable<Vertex> vertices = sphericalFace.GetVertices();
         Assert.That(vertices.Count(), Is.EqualTo(2), "Expected 2 vertices for the spherical face.");
+        IEnumerable<Edge> edges = sphericalFace.EdgeUses.Select(eu => eu.Edge).Distinct();
+        Assert.That(edges.Count(), Is.EqualTo(3), "Expected 3 edges : 2 poles and 1 seam");
+        Assert.That(edges.Distinct().Count(e => e!.IsSeam), Is.EqualTo(1), "Expected one edge to be seam.");
+        Assert.That(edges.Count(e => e.IsPole), Is.EqualTo(2), "Expected 2 edges to be poles.");
     }
 }

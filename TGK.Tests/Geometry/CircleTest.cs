@@ -1,4 +1,5 @@
 ﻿using NUnit.Framework;
+using System;
 using System.Collections.Generic;
 using TGK.Geometry;
 using TGK.Geometry.Curves;
@@ -38,5 +39,17 @@ public class CircleTest
 
         var expected1 = new Xyz(1, 6, 3);
         Assert.That(points[^1].IsAlmostEqualTo(expected1), $"Expected: {expected1}, actual: {points[^1]}.");
+    }
+
+    [Test]
+    public void TestGetParameterAtPoint()
+    {
+        var center = new Xyz(1, 2, 3);
+        const double RADIUS = 4;
+        var circle = new Circle(center, Xyz.ZAxis, RADIUS);
+        Assert.Throws<ArgumentException>(() => circle.GetParameterAtPoint(Xyz.Zero));
+        Assert.That(circle.GetParameterAtPoint(new Xyz(5, 2, 3)), Is.EqualTo(0));
+        Assert.That(circle.GetParameterAtPoint(new Xyz(-3, 2, 3)), Is.EqualTo(PI));
+        Assert.That(circle.GetParameterAtPoint(new Xyz(1, -2, 3)), Is.EqualTo(1.5 * PI));
     }
 }
