@@ -10,6 +10,8 @@ public sealed class ModelTreeItem : ObservableObject
 
     bool _isSelected;
 
+    bool _isExpanded;
+
     public string DisplayName
     {
         get => _displayName;
@@ -20,6 +22,12 @@ public sealed class ModelTreeItem : ObservableObject
     {
         get => _isSelected;
         set => SetProperty(ref _isSelected, value);
+    }
+
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set => SetProperty(ref _isExpanded, value);
     }
 
     public ObservableCollection<ModelTreeItem> Children { get; } = [];

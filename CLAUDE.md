@@ -65,3 +65,4 @@ The solution consists of three main projects:
 - Core library has no external dependencies
 - Viewer uses HelixToolkit.SharpDX for 3D rendering
 - Tests use NUnit and Verify.NUnit frameworks
+- Pour ce projet, les commentaires doivent être en anglais

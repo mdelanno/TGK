@@ -6,14 +6,13 @@ using HelixToolkit.SharpDX.Core.Model.Scene;
 using HelixToolkit.Wpf.SharpDX;
 using SharpDX;
 using SharpDX.Direct3D11;
-using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Media.Media3D;
 using TGK.FaceterServices;
 using TGK.Geometry;
 using TGK.Geometry.Curves;
 using TGK.Topology;
+using TGK.Viewer.Services;
 using Camera = HelixToolkit.Wpf.SharpDX.Camera;
 using Color = SharpDX.Color;
 using DiffuseMaterial = HelixToolkit.Wpf.SharpDX.DiffuseMaterial;
@@ -27,10 +26,13 @@ namespace TGK.Viewer.ViewModels;
 
 public sealed class MainViewModel : ObservableObject
 {
+    const double CURVE_UPDATE_THROTTLE_SECONDS = 1.0;
+
     readonly BitmapFont _flamaFont;
 
     readonly IView _view;
 
+    readonly ISelectionService _selectionService;
 
     Solid? _solid;
 
@@ -66,15 +68,15 @@ public sealed class MainViewModel : ObservableObject
 
     bool _geometryChanged;
 
-    Edge? _selectedEdge;
-
     LineNode? _curveLineNode;
 
     readonly List<Edge> _curveEdges = [];
 
-    public ObservableCollection<ModelTreeItem> ModelTreeItems { get; } = [];
+    double _lastZoom = double.NaN;
 
-    public ObservableCollection<ModelTreeItem> SelectedTreeItems { get; } = [];
+    DateTime _lastCurveUpdateTime = DateTime.MinValue;
+
+    public ModelTreeViewModel ModelTree { get; }
 
     public bool ShowVertices
     {
@@ -231,11 +233,14 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    public MainViewModel(IView view)
+    public MainViewModel(IView view, ISelectionService selectionService)
     {
         ArgumentNullException.ThrowIfNull(view);
+        ArgumentNullException.ThrowIfNull(selectionService);
 
         _view = view;
+        _selectionService = selectionService;
+        ModelTree = new ModelTreeViewModel(_selectionService);
 
         Camera = InitializeModelSpaceCamera();
         ParametricSpaceCamera = InitializeParametricSpaceCamera();
@@ -259,11 +264,11 @@ public sealed class MainViewModel : ObservableObject
         Zoom1_1Command = new RelayCommand(Zoom1_1);
 
         CloseParametricSpacePaneCommand = new RelayCommand(HideParametricSpacePane);
-        ClearSelectionCommand = new RelayCommand(ClearAllSelections);
+        ClearSelectionCommand = new RelayCommand(() => ModelTree.ClearSelectionCommand.Execute(null));
         SelectEntityCommand = new RelayCommand<System.Windows.Point?>(SelectEntityAt3D);
 
-        // S'abonner aux changements de sélection dans le TreeView
-        SelectedTreeItems.CollectionChanged += OnSelectedTreeItemsChanged;
+        // Subscribe to selection changes
+        _selectionService.SelectionChanged += OnSelectionChanged;
     }
 
     void AddFaceNormalsNode()
@@ -299,18 +304,13 @@ public sealed class MainViewModel : ObservableObject
             AddFaceNormalsNode();
     }
 
-    void OnSelectedTreeItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    void OnSelectionChanged(IEnumerable<BRepEntity> entities)
     {
-        ArgumentNullException.ThrowIfNull(e);
+        ArgumentNullException.ThrowIfNull(entities);
 
-        // Mettre à jour les visuels de sélection dans la vue 3D
         UpdateSelectionVisuals();
-
-        // Mettre à jour l'affichage de l'espace paramètrique
         ParametricSpaceRootSceneNode.Clear();
-
-        // Afficher la face sélectionnée dans l'espace paramétrique
-        Face? selectedFace = GetSelectedFaceOrDefault();
+        Face? selectedFace = entities.OfType<Face>().FirstOrDefault();
         if (selectedFace != null)
         {
             AddFaceToParametricSpace(selectedFace);
@@ -335,7 +335,7 @@ public sealed class MainViewModel : ObservableObject
             Position = new Point3D(1, 1, 1),
             LookDirection = lookDirection,
             UpDirection = new Vector3D(0, 0, 1),
-            NearPlaneDistance = -1000,
+            NearPlaneDistance = -1000,  // Safe default values until model is loaded
             FarPlaneDistance = 1000
         };
         camera.Changed += CameraOnChanged;
@@ -357,15 +357,60 @@ public sealed class MainViewModel : ObservableObject
         return camera;
     }
 
+    void UpdateClippingPlanes()
+    {
+        if (Camera is not OrthographicCamera orthographicCamera)
+            return;
+
+        var boundingBox = _view.CalculateModelSpaceBoundingBox();
+
+        if (boundingBox.Size.Length() == 0.0)
+        {
+            // Conservative values for empty model
+            orthographicCamera.NearPlaneDistance = -100;
+            orthographicCamera.FarPlaneDistance = 100;
+            return;
+        }
+
+        // Simple conservative approach: use model center and size
+        var modelCenter = new Xyz(boundingBox.Center.X, boundingBox.Center.Y, boundingBox.Center.Z);
+        var cameraPosition = new Xyz(orthographicCamera.Position.X, orthographicCamera.Position.Y, orthographicCamera.Position.Z);
+        var lookDirection = new Xyz(orthographicCamera.LookDirection.X, orthographicCamera.LookDirection.Y, orthographicCamera.LookDirection.Z).ToUnit();
+
+        // Distance from camera to model center along view direction
+        var vectorToCenter = modelCenter - cameraPosition;
+        double centerDistance = vectorToCenter.DotProduct(lookDirection);
+
+        // Use very conservative margins: model size on each side plus extra safety
+        double modelSize = boundingBox.Size.Length();
+        double safetyMargin = Math.Max(modelSize * 2.0, 10.0);
+        
+        double nearPlane = centerDistance - safetyMargin;
+        double farPlane = centerDistance + safetyMargin;
+
+        orthographicCamera.NearPlaneDistance = nearPlane;
+        orthographicCamera.FarPlaneDistance = farPlane;
+    }
+
     void CameraOnChanged(object? sender, EventArgs e)
     {
+        double currentZoom = Zoom;
+        bool zoomChanged = !double.IsNaN(_lastZoom) && !currentZoom.IsAlmostEqualTo(_lastZoom, 1e-6);
+
         OnPropertyChanged(nameof(Zoom));
-        
-        // Mettre à jour le niveau de détail des courbes si le zoom a changé
-        if (_solid != null && _curveEdges.Count > 0)
+
+        // Update curve detail level if zoom changed
+        if (zoomChanged && _solid != null && _curveEdges.Count > 0)
         {
-            UpdateCurveDetailLevel();
+            DateTime now = DateTime.Now;
+            if ((now - _lastCurveUpdateTime).TotalSeconds >= CURVE_UPDATE_THROTTLE_SECONDS)
+            {
+                UpdateCurveDetailLevel();
+                _lastCurveUpdateTime = now;
+            }
         }
+
+        _lastZoom = currentZoom;
     }
 
     void CreateVertex()
@@ -544,12 +589,6 @@ public sealed class MainViewModel : ObservableObject
 
     void Update()
     {
-        if (_solid is null)
-        {
-            ModelTreeItems.Clear();
-            return;
-        }
-
         if (_geometryChanged)
         {
             _geometryChanged = false;
@@ -558,7 +597,10 @@ public sealed class MainViewModel : ObservableObject
 
         UpdateModelSpace();
         UpdateParametricSpace();
-        UpdateModelTree();
+        ModelTree.UpdateTree(_solid);
+        
+        // Update clipping planes when model changes
+        UpdateClippingPlanes();
     }
 
     void UpdateParametricSpace()
@@ -566,14 +608,9 @@ public sealed class MainViewModel : ObservableObject
         ParametricSpaceRootSceneNode.Clear();
 
         // Afficher la face sélectionnée dans l'espace paramétrique
-        Face? selectedFace = GetSelectedFaceOrDefault();
+        Face? selectedFace = _selectionService.SelectedEntities.OfType<Face>().FirstOrDefault();
         if (selectedFace != null) AddFaceToParametricSpace(selectedFace);
         _view.ParametricSpaceZoomExtents();
-    }
-
-    Face? GetSelectedFaceOrDefault()
-    {
-        return SelectedTreeItems.Where(item => item.Data is Face).Select(item => item.Data as Face).FirstOrDefault();
     }
 
     void AddFaceToParametricSpace(Face face)
@@ -689,6 +726,8 @@ public sealed class MainViewModel : ObservableObject
         _faceNormals = null;
         _curveLineNode = null;
         _curveEdges.Clear();
+        _lastZoom = Zoom; // Réinitialiser le zoom de référence après reconstruction
+        _lastCurveUpdateTime = DateTime.MinValue; // Permettre immédiatement la prochaine mise à jour des courbes
         ParametricSpaceRootSceneNode.Clear();
 
         _modelSpaceLabel = null;
@@ -809,13 +848,13 @@ public sealed class MainViewModel : ObservableObject
                 Geometry = straightLineBuilder.ToLineGeometry3D()!,
                 HitTestThickness = 5
             };
-            
+
             // Associer le node aux edges pour la sélection
             foreach (Edge edge in straightEdges)
             {
                 edge.Tag = straightLineNode;
             }
-            
+
             ModelSpaceRootSceneNode.AddNode(straightLineNode);
         }
 
@@ -832,17 +871,17 @@ public sealed class MainViewModel : ObservableObject
                 Geometry = curveLineBuilder.ToLineGeometry3D()!,
                 HitTestThickness = 5
             };
-            
+
             // Stocker la liste des courbes pour les mises à jour de niveau de détail
             _curveEdges.Clear();
             _curveEdges.AddRange(curveEdges);
-            
+
             // Associer le node aux edges pour la sélection
             foreach (Edge edge in curveEdges)
             {
                 edge.Tag = _curveLineNode;
             }
-            
+
             ModelSpaceRootSceneNode.AddNode(_curveLineNode);
         }
         else
@@ -931,193 +970,56 @@ public sealed class MainViewModel : ObservableObject
         ModelSpaceRootSceneNode.AddNode(billboardNode);
     }
 
-    void UpdateModelTree()
-    {
-        // Sauvegarder les entités sélectionnées
-        var selectedEntities = SelectedTreeItems.Select(item => item.Data).ToHashSet();
-
-        ModelTreeItems.Clear();
-
-        if (_solid == null)
-        {
-            // Si pas de solide, vider aussi les sélections
-            SelectedTreeItems.Clear();
-            return;
-        }
-
-        var newSelectedItems = new List<ModelTreeItem>();
-
-        var rootItem = new ModelTreeItem("Model");
-        ModelTreeItems.Add(rootItem);
-
-        if (_solid.Vertices.Count > 0)
-        {
-            var verticesItem = new ModelTreeItem($"Vertices ({_solid.Vertices.Count})");
-            rootItem.Children.Add(verticesItem);
-
-            foreach (Vertex vertex in _solid.Vertices)
-            {
-                var vertexItem = new ModelTreeItem($"Vertex {vertex.Id}: {vertex.Position}", vertex);
-                verticesItem.Children.Add(vertexItem);
-
-                // Si cette entité était sélectionnée, l'ajouter à la nouvelle liste
-                if (selectedEntities.Contains(vertex))
-                {
-                    newSelectedItems.Add(vertexItem);
-                    vertexItem.IsSelected = true;
-                }
-            }
-        }
-
-        if (_solid.Edges.Count > 0)
-        {
-            var edgesItem = new ModelTreeItem($"Edges ({_solid.Edges.Count})");
-            rootItem.Children.Add(edgesItem);
-
-            foreach (Edge edge in _solid.Edges)
-            {
-                string edgeDescription;
-                switch (edge.Curve)
-                {
-                    case null:
-                        edgeDescription = edge.IsPole ? $"Pole: {edge.StartVertex.Position}" : $"Line: {edge.StartVertex.Position} → {edge.EndVertex.Position}";
-                        break;
-
-                    case Circle circle:
-                        edgeDescription = $"Circle: Center={circle.Center}, Radius={circle.Radius:F2}";
-                        break;
-
-                    default:
-                        edgeDescription = edge.Curve.GetType().Name;
-                        break;
-                }
-                if (edge.IsSeam)
-                    edgeDescription += " (seam)";
-                var edgeItem = new ModelTreeItem($"Edge {edge.Id}: {edgeDescription}", edge);
-                edgesItem.Children.Add(edgeItem);
-
-                // Si cette entité était sélectionnée, l'ajouter à la nouvelle liste
-                if (selectedEntities.Contains(edge))
-                {
-                    newSelectedItems.Add(edgeItem);
-                    edgeItem.IsSelected = true;
-                }
-            }
-        }
-
-        if (_solid.Faces.Count > 0)
-        {
-            var facesItem = new ModelTreeItem($"Faces ({_solid.Faces.Count})");
-            rootItem.Children.Add(facesItem);
-
-            foreach (Face face in _solid.Faces)
-            {
-                string surfaceDescription = face.Surface.GetType().Name;
-                var faceItem = new ModelTreeItem($"Face {face.Id}: {surfaceDescription}", face);
-                facesItem.Children.Add(faceItem);
-
-                // Si cette entité était sélectionnée, l'ajouter à la nouvelle liste
-                if (selectedEntities.Contains(face))
-                {
-                    newSelectedItems.Add(faceItem);
-                    faceItem.IsSelected = true;
-                }
-            }
-        }
-
-        // Synchroniser SelectedTreeItems avec newSelectedItems
-        SynchronizeSelectedItems(newSelectedItems);
-    }
-
-    void SynchronizeSelectedItems(List<ModelTreeItem> newSelectedItems)
-    {
-        // Supprimer les éléments qui ne sont plus sélectionnés
-        for (int i = SelectedTreeItems.Count - 1; i >= 0; i--)
-        {
-            if (!newSelectedItems.Contains(SelectedTreeItems[i]))
-            {
-                SelectedTreeItems.RemoveAt(i);
-            }
-        }
-
-        // Ajouter les nouveaux éléments sélectionnés
-        foreach (ModelTreeItem newItem in newSelectedItems)
-        {
-            if (!SelectedTreeItems.Contains(newItem))
-            {
-                SelectedTreeItems.Add(newItem);
-            }
-        }
-
-        // Mettre à jour les visuels après la synchronisation
-        UpdateSelectionVisuals();
-    }
-
-    void ClearAllSelections()
-    {
-        foreach (ModelTreeItem item in ModelTreeItems)
-        {
-            ClearSelectionRecursively(item);
-        }
-        SelectedTreeItems.Clear();
-        UpdateSelectionVisuals();
-    }
 
     void SelectEntityAt3D(System.Windows.Point? mousePosition)
     {
         if (mousePosition == null || _solid == null)
         {
-            ClearAllSelections();
+            ModelTree.ClearSelectionCommand.Execute(null);
             return;
         }
 
-        // Perform hit testing on the 3D viewport
         IList<HitTestResult>? hits = _view.HitTest(mousePosition.Value);
-        if (hits.Count == 0)
+        if (hits == null || hits.Count == 0)
         {
-            ClearAllSelections();
+            ModelTree.ClearSelectionCommand.Execute(null);
             return;
         }
 
-        // Find the first hit that corresponds to a TGK entity
         bool entityFound = false;
         foreach (HitTestResult hit in hits)
         {
             if (hit.ModelHit is SceneNode node)
             {
-                // Find the corresponding TGK entity
-                object? tgkEntity = FindTgkEntityFromNode(node, hit.Tag);
+                BRepEntity? tgkEntity = FindTgkEntityFromNode(node, hit.Tag);
                 if (tgkEntity != null)
                 {
-                    SelectEntity(tgkEntity);
+                    ModelTree.SelectEntity(tgkEntity);
+                    var treeItem = ModelTree.FindItem(tgkEntity);
+                    if (treeItem != null)
+                        _view.ExpandParentNodesForSelectedItem(treeItem);
                     entityFound = true;
                     break;
                 }
             }
         }
 
-        // If no TGK entity was found, clear selection
         if (!entityFound)
-        {
-            ClearAllSelections();
-        }
+            ModelTree.ClearSelectionCommand.Execute(null);
     }
 
-    object? FindTgkEntityFromNode(SceneNode node, object? hitTag)
+    BRepEntity? FindTgkEntityFromNode(SceneNode node, object? hitTag)
     {
-        // Check if this node corresponds to a vertex
         foreach ((Vertex v, int i) in _solid!.Vertices.Select((v, i) => (v, i)))
         {
             if (v.Tag == node && i == (int)hitTag!) return v;
         }
 
-        // Check if this node corresponds to an edge
         foreach (Edge edge in _solid.Edges)
         {
             if (edge.Tag == node) return edge;
         }
 
-        // Check if this node corresponds to a face
         foreach (Face face in _solid.Faces)
         {
             if (face.Tag == node) return face;
@@ -1126,66 +1028,11 @@ public sealed class MainViewModel : ObservableObject
         return null;
     }
 
-    void SelectEntity(object entity)
-    {
-        // Clear all current selections first
-        ClearAllSelections();
-
-        // Find the corresponding ModelTreeItem
-        ModelTreeItem? itemToSelect = FindModelTreeItem(entity);
-        if (itemToSelect != null)
-        {
-            // Add the new item to selection
-            SelectedTreeItems.Add(itemToSelect);
-
-            // Update visual selection in the tree
-            itemToSelect.IsSelected = true;
-
-            // Expand parent nodes to make the selected item visible
-            _view.ExpandParentNodesForSelectedItem(itemToSelect);
-
-            // Force update of visual selection in 3D view
-            UpdateSelectionVisuals();
-        }
-    }
-
-    ModelTreeItem? FindModelTreeItem(object entity)
-    {
-        foreach (ModelTreeItem rootItem in ModelTreeItems)
-        {
-            ModelTreeItem? found = FindModelTreeItemRecursively(rootItem, entity);
-            if (found != null) return found;
-        }
-        return null;
-    }
-
-    static ModelTreeItem? FindModelTreeItemRecursively(ModelTreeItem item, object entity)
-    {
-        if (item.Data == entity) return item;
-
-        foreach (ModelTreeItem child in item.Children)
-        {
-            ModelTreeItem? found = FindModelTreeItemRecursively(child, entity);
-            if (found != null) return found;
-        }
-
-        return null;
-    }
-
-    static void ClearSelectionRecursively(ModelTreeItem item)
-    {
-        item.IsSelected = false;
-        foreach (ModelTreeItem child in item.Children)
-        {
-            ClearSelectionRecursively(child);
-        }
-    }
-
     bool IsEntitySelected(BRepEntity entity)
     {
         ArgumentNullException.ThrowIfNull(entity);
 
-        return SelectedTreeItems.Any(item => item.Data == entity);
+        return _selectionService.SelectedEntities.Contains(entity);
     }
 
     void UpdateSelectionVisuals()

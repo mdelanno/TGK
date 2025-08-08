@@ -1,8 +1,10 @@
 using HelixToolkit.SharpDX.Core;
 using HelixToolkit.Wpf.SharpDX;
-using System.Windows;
+using SharpDX;
 using System.Windows.Input;
+using TGK.Viewer.Services;
 using TGK.Viewer.ViewModels;
+using Point = System.Windows.Point;
 
 namespace TGK.Viewer.Views;
 
@@ -16,7 +18,8 @@ public sealed partial class MainWindow : IView
     {
         InitializeComponent();
 
-        var viewModel = new MainViewModel(this);
+        var selectionService = new SelectionService();
+        var viewModel = new MainViewModel(this, selectionService);
         DataContext = viewModel;
     }
 
@@ -48,11 +51,13 @@ public sealed partial class MainWindow : IView
         if (e.ChangedButton == MouseButton.Left)
         {
             Point position = e.GetPosition(modelSpaceViewport!);
-            
+
             if (DataContext is MainViewModel viewModel)
             {
                 viewModel.SelectEntityCommand.Execute(position);
             }
         }
     }
+
+    public BoundingBox CalculateModelSpaceBoundingBox() => modelSpaceViewport!.FindBounds();
 }

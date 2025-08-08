@@ -71,9 +71,9 @@
                     <RowDefinition />
                 </Grid.RowDefinitions>
                 <TextBlock Grid.Row="0" Text="Model Explorer" FontWeight="Bold" Margin="5" />
-                <controls:MultiSelectTreeView x:Name="modelTreeView" Grid.Row="1" ItemsSource="{Binding ModelTreeItems}" Margin="5"
+                <controls:MultiSelectTreeView x:Name="modelTreeView" Grid.Row="1" ItemsSource="{Binding ModelTree.Items}" Margin="5"
                                               ItemContainerStyle="{StaticResource MultiSelectTreeViewItemStyle}"
-                                              SelectedItems="{Binding SelectedTreeItems}">
+                                              SelectedItems="{Binding ModelTree.SelectedItems}">
                     <controls:MultiSelectTreeView.ItemTemplate>
                         <HierarchicalDataTemplate ItemsSource="{Binding Children}">
                             <TextBlock Text="{Binding DisplayName}" />

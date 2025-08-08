@@ -1,11 +1,10 @@
 using HelixToolkit.SharpDX.Core;
+using SharpDX;
 
 namespace TGK.Viewer.ViewModels;
 
 public interface IView
 {
-    double ViewportHeight { get; }
-
     double ViewportWidth { get; }
 
     void ModelSpaceZoomExtents();
@@ -15,4 +14,6 @@ public interface IView
     void ExpandParentNodesForSelectedItem(ModelTreeItem modelTreeItem);
 
     void ParametricSpaceZoomExtents();
+
+    BoundingBox CalculateModelSpaceBoundingBox();
 }
