@@ -6,7 +6,7 @@ namespace TGK.Geometry.Surfaces;
 /// <summary>
 /// Spherical surface.
 ///
-/// Parameter range is [-π, π) for u, [-π/2, π/2] for v.
+/// Parameter range is [0, τ) for u, [-π/2, π/2] for v.
 /// </summary>
 public sealed class Sphere : Surface
 {
@@ -93,6 +93,6 @@ public sealed class Sphere : Surface
 
     public override Interval2d GetDomain()
     {
-        return new Interval2d(-PI, PI.GetPrevious(), -PI / 2, PI / 2);
+        return new Interval2d(0, double.Tau.GetPrevious(), -PI / 2, PI / 2);
     }
 }

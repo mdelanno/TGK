@@ -10,5 +10,5 @@ public enum EdgeFlags : byte
     /// <summary>
     /// Degenerate edge which is a single point. Used for poles in spherical faces.
     /// </summary>
-    Pole = 2
+    Pole = 4
 }

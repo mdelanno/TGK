@@ -266,7 +266,7 @@ public sealed class Solid
         return solid;
     }
 
-    Face AddSphericalFace(Xyz center, double radius)
+    void AddSphericalFace(Xyz center, double radius)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
 
@@ -287,14 +287,12 @@ public sealed class Solid
         var circle = new Circle(center, Xyz.YAxis, radius);
         var seam = new Edge(Edges.Count, southPole, northPole, circle, EdgeFlags.Seam);
         Edges.Add(seam);
-        face.AddEdgeUse(seam);
+        face.AddEdgeUse(seam, flags: EdgeUseFlags.HighSeam);
 
         var northPoleEdge = new Edge(Edges.Count, northPole, northPole, flags: EdgeFlags.Pole);
         Edges.Add(northPoleEdge);
         face.AddEdgeUse(northPoleEdge);
 
-        face.AddEdgeUse(seam, sameSenseAsEdge: false);
-
-        return face;
+        face.AddEdgeUse(seam, sameSenseAsEdge: false, flags: EdgeUseFlags.LowSeam);
     }
 }

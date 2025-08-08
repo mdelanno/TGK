@@ -24,11 +24,11 @@ public sealed class Face : BRepEntity
         EdgeUses = _edgeUses.AsReadOnly();
     }
 
-    internal void AddEdgeUse(Edge edge, bool sameSenseAsEdge = true)
+    internal void AddEdgeUse(Edge edge, bool sameSenseAsEdge = true, EdgeUseFlags flags = EdgeUseFlags.None)
     {
         ArgumentNullException.ThrowIfNull(edge);
 
-        var edgeUse = new EdgeUse(this, edge, sameSenseAsEdge);
+        var edgeUse = new EdgeUse(this, edge, sameSenseAsEdge, flags);
         if (_edgeUses.Count > 0)
         {
             if (_edgeUses[^1].EndVertex != edgeUse.StartVertex)

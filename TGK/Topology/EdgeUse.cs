@@ -2,6 +2,8 @@
 
 sealed class EdgeUse
 {
+    readonly EdgeUseFlags _flags;
+
     public Face Face { get; }
 
     public Edge Edge { get; }
@@ -12,7 +14,11 @@ sealed class EdgeUse
 
     public Vertex EndVertex => SameSenseAsEdge ? Edge.EndVertex : Edge.StartVertex;
 
-    public EdgeUse(Face face, Edge edge, bool sameSenseAsEdge = true)
+    public bool IsHighSeam => _flags.HasFlag(EdgeUseFlags.HighSeam);
+
+    public bool IsLowSeam => _flags.HasFlag(EdgeUseFlags.LowSeam);
+
+    public EdgeUse(Face face, Edge edge, bool sameSenseAsEdge = true, EdgeUseFlags flags = EdgeUseFlags.None)
     {
         ArgumentNullException.ThrowIfNull(face);
         ArgumentNullException.ThrowIfNull(edge);
@@ -20,6 +26,7 @@ sealed class EdgeUse
         Face = face;
         Edge = edge;
         SameSenseAsEdge = sameSenseAsEdge;
+        _flags = flags;
 
         edge.AddUseInternal(this);
     }

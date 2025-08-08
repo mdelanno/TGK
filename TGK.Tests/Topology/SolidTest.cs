@@ -60,6 +60,8 @@ public class SolidTest
         Assert.That(sphericalFace.EdgeUses.Count, Is.EqualTo(4), "Expected 4 edge uses for the spherical face.");
         Assert.That(sphericalFace.EdgeUses.Count(eu => eu.SameSenseAsEdge), Is.EqualTo(3), "Expected 3 edge uses in the same sense as the edge.");
         Assert.That(sphericalFace.EdgeUses.Count(eu => !eu.SameSenseAsEdge), Is.EqualTo(1), "Expected 1 edge uses in the opposite sense as the edge.");
+        Assert.That(sphericalFace.EdgeUses.Count(eu => eu.IsHighSeam), Is.EqualTo(1), "Expected 1 edge use to be high seam.");
+        Assert.That(sphericalFace.EdgeUses.Count(eu => eu.IsLowSeam), Is.EqualTo(1), "Expected 1 edge use to be low seam.");
         IEnumerable<Vertex> vertices = sphericalFace.GetVertices();
         Assert.That(vertices.Count(), Is.EqualTo(2), "Expected 2 vertices for the spherical face.");
         IEnumerable<Edge> edges = sphericalFace.EdgeUses.Select(eu => eu.Edge).Distinct();

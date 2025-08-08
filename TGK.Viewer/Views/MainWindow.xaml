@@ -82,7 +82,7 @@
                 </controls:MultiSelectTreeView>
             </Grid>
             <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch" ShowsPreview="True"/>
-            <hx:Viewport3DX Grid.Column="2" x:Name="viewport3Dx"  Orthographic="True" ZoomAroundMouseDownPoint="True" MSAA="Maximum" ModelUpDirection="0 0 1"
+            <hx:Viewport3DX Grid.Column="2" x:Name="modelSpaceViewport"  Orthographic="True" ZoomAroundMouseDownPoint="True" MSAA="Maximum" ModelUpDirection="0 0 1"
                             ViewCubeVerticalPosition="0.8" IsViewCubeMoverEnabled="False" Title="3D space"
                             EffectsManager="{Binding EffectsManager}" ShowCoordinateSystem="True"
                             Camera="{Binding Camera}" EnableDesignModeRendering="False"
@@ -101,32 +101,26 @@
                     <RowDefinition />
                 </Grid.RowDefinitions>
                 <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition />
-                        <RowDefinition />
-                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition />
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <StackPanel Orientation="Horizontal" Margin="0 5 0 0">
-                        <Label Margin="0 0 2.5 0">Face:</Label>
-                        <ComboBox Width="150" Margin="2.5 0 0 0" VerticalAlignment="Center" ItemsSource="{Binding Faces, Mode=OneTime}"
-                                  SelectedItem="{Binding SelectedFace}"/>
-                        <Label Margin="2.5 0">Edge:</Label>
-                        <ComboBox Width="150" Margin="2.5 0 0 0" VerticalAlignment="Center" ItemsSource="{Binding Edges, Mode=OneTime}"
-                                  SelectedItem="{Binding SelectedEdge}"/>
-                    </StackPanel>
-                    <Button Grid.Row="0" Grid.Column="1" Style="{StaticResource ImageButton}" Command="{Binding CloseParametricSpacePaneCommand}">
+                    <Button Grid.Column="1" Style="{StaticResource ImageButton}" Command="{Binding CloseParametricSpacePaneCommand}">
                         <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE10A;" FontSize="12" />
                     </Button>
-                    <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" Margin="5 10 5 5">
+                    <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Margin="5 10 5 5">
                         <CheckBox Margin="0 0 2.5 0" IsChecked="{Binding ShowBoundingBox}">Bounding box</CheckBox>
                     </StackPanel>
                 </Grid>
                 <hx:Viewport3DX Grid.Row="1" EnableDesignModeRendering="False" ShowViewCube="False" Title="Parametric space"
                                 EffectsManager="{Binding EffectsManager}" x:Name="parametricSpaceViewport" ZoomAroundMouseDownPoint="True"
+                                Orthographic="True" Camera="{Binding ParametricSpaceCamera}" MSAA="Maximum"
+                                ModelUpDirection="0 1 0" ShowCoordinateSystem="True"
                                 Margin="5">
+                    <hx:Viewport3DX.InputBindings>
+                        <MouseBinding Command="{x:Static hx:ViewportCommands.Pan}" MouseAction="MiddleClick" />
+                        <MouseBinding Command="{x:Static hx:ViewportCommands.ZoomExtents}" MouseAction="MiddleDoubleClick" />
+                    </hx:Viewport3DX.InputBindings>
                     <hx:Element3DPresenter Content="{Binding ParametricSpaceRootSceneNode}" />
                 </hx:Viewport3DX>
             </Grid>

@@ -65,22 +65,22 @@ public sealed class Mesh
                 Edge edge = edgeUse.Edge;
                 if (edge.IsPole)
                 {
-                    // Projecting a pole is like projecting the equatorial circle on a cylinder.
+                    // Projecting a pole is like projecting the equatorial circle on a cylinder with a radius of one.
                     var sphere = (Sphere)face.Surface;
                     var cylinderAxis = new Line(sphere.Center, sphere.AxisDirection);
-                    var cylinder = new Cylinder(cylinderAxis, sphere.Radius);
-                    var circle = new Circle(sphere.Center, sphere.AxisDirection, sphere.Radius);
+                    var cylinder = new Cylinder(cylinderAxis, 1);
+                    var circle = new Circle(sphere.Center, sphere.AxisDirection, 1);
                     if (edge.StartVertex.Position.IsAlmostEqualTo(sphere.SouthPole))
                     {
                         // South Pole
                         circle.TranslateBy(sphere.AxisDirection * -Math.PI / 2);
-                        ProjectCircleOnCylinder(face, cylinder, edgeUse, circle, nodes);
+                        ProjectCircleOnCylinder(face, edgeUse, cylinder, circle, nodes);
                     }
                     else
                     {
                         // North Pole
                         circle.TranslateBy(sphere.AxisDirection * Math.PI / 2);
-                        ProjectCircleOnCylinder(face, cylinder, edgeUse, circle, nodes);
+                        ProjectCircleOnCylinder(face, edgeUse, cylinder, circle, nodes);
                     }
                 }
                 else
@@ -92,12 +92,18 @@ public sealed class Mesh
                                 switch (face.Surface)
                                 {
                                     case Cylinder cylinder:
-                                        ProjectCircleOnCylinder(face, cylinder, edgeUse, circle, nodes);
+                                        ProjectCircleOnCylinder(face, edgeUse, cylinder, circle, nodes);
                                         break;
 
                                     case Sphere sphere:
-                                        ProjectCircleOnSphere(face, sphere, edgeUse, circle, nodes);
-                                        break;
+                                        {
+                                            var cylinderAxis = new Line(sphere.Center, sphere.AxisDirection.GetPerpendicularDirection());
+                                            var cylinder = new Cylinder(cylinderAxis, 1);
+                                            var tempCircle = new Circle(sphere.Center, cylinderAxis.Direction, 1);
+                                            if (edgeUse.IsHighSeam) tempCircle.TranslateBy(cylinderAxis.Direction * double.Tau);
+                                            ProjectCircleOnCylinder(face, edgeUse, cylinder, tempCircle, nodes);
+                                            break;
+                                        }
 
                                     default:
                                         throw new NotImplementedException();
@@ -129,7 +135,7 @@ public sealed class Mesh
 
         Xyz point = edgeUse.StartVertex.Position;
         Uv parametricSpacePosition = face.Surface.GetParametersAtPoint(point);
-        if (edge.IsSeam && edgeUse.SameSenseAsEdge)
+        if (edge.IsSeam && edgeUse.IsHighSeam)
             parametricSpacePosition = new Uv(double.Tau, parametricSpacePosition.V);
         var node = new Node(Positions.Count, parametricSpacePosition);
         nodes.Add(node);
@@ -137,11 +143,11 @@ public sealed class Mesh
         Normals.Add(face.Surface.GetNormal(point));
     }
 
-    void ProjectCircleOnCylinder(Face face, Cylinder cylinder, EdgeUse edgeUse, Circle circle, List<Node> nodes)
+    void ProjectCircleOnCylinder(Face face, EdgeUse edgeUse, Cylinder cylinder, Circle circle, List<Node> nodes)
     {
         ArgumentNullException.ThrowIfNull(face);
-        ArgumentNullException.ThrowIfNull(cylinder);
         ArgumentNullException.ThrowIfNull(edgeUse);
+        ArgumentNullException.ThrowIfNull(cylinder);
         ArgumentNullException.ThrowIfNull(circle);
         ArgumentNullException.ThrowIfNull(nodes);
 

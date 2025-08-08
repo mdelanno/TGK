@@ -125,7 +125,7 @@ public sealed class Grid
 
     double _right;
 
-    double _top;
+    readonly double _top;
 
     bool _alreadyCalled;
 

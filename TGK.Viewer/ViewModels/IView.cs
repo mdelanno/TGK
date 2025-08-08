@@ -8,9 +8,11 @@ public interface IView
 
     double ViewportWidth { get; }
 
-    void ZoomExtents();
+    void ModelSpaceZoomExtents();
 
     IList<HitTestResult>? HitTest(System.Windows.Point position);
 
     void ExpandParentNodesForSelectedItem(ModelTreeItem modelTreeItem);
+
+    void ParametricSpaceZoomExtents();
 }

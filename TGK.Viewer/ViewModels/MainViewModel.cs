@@ -1,4 +1,4 @@
- ﻿using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Input;
 using Cyotek.Drawing.BitmapFont;
 using HelixToolkit.SharpDX.Core;
 using HelixToolkit.SharpDX.Core.Model;
@@ -68,8 +68,12 @@ public sealed class MainViewModel : ObservableObject
 
     Edge? _selectedEdge;
 
+    LineNode? _curveLineNode;
+
+    readonly List<Edge> _curveEdges = [];
+
     public ObservableCollection<ModelTreeItem> ModelTreeItems { get; } = [];
-    
+
     public ObservableCollection<ModelTreeItem> SelectedTreeItems { get; } = [];
 
     public bool ShowVertices
@@ -135,39 +139,6 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    void AddFaceNormalsNode()
-    {
-        if (_solid == null || _solid.Faces.Count == 0) return;
-
-        var builder = new MeshBuilder();
-        var material = new DiffuseMaterial
-        {
-            DiffuseColor = Color.Orange
-        };
-        foreach (Face face in _solid!.Faces)
-        {
-            Xyz point = face.GetPointOnFace();
-            var p0 = point.ToVector3();
-            double area = face.CalculateArea(0.1);
-            double arrowLength = area / 25;
-            Vector3 p1 = p0 + (face.GetNormal(point) * arrowLength).ToVector3();
-            builder.AddArrow(p0, p1, arrowLength / 8);
-        }
-        _faceNormals = new MeshNode
-        {
-            Geometry = builder.ToMesh()!,
-            Material = material
-        };
-        ModelSpaceRootSceneNode.AddNode(_faceNormals);
-    }
-
-    void OnGeometryChanged()
-    {
-        _faceNormals?.RemoveSelf();
-        if (ShowFaceNormals)
-            AddFaceNormalsNode();
-    }
-
     public RelayCommand CreateVertexCommand { get; }
 
     public RelayCommand CreateEdgesCommand { get; }
@@ -197,6 +168,8 @@ public sealed class MainViewModel : ObservableObject
     public SceneNodeGroupModel3D ParametricSpaceRootSceneNode { get; } = new();
 
     public Camera Camera { get; }
+
+    public Camera ParametricSpaceCamera { get; }
 
     public double Zoom
     {
@@ -240,20 +213,10 @@ public sealed class MainViewModel : ObservableObject
         set => SetProperty(ref _parametricSpacePaneColumnWidth, value);
     }
 
-    public ObservableCollection<Face> Faces { get; } = [];
-
     public Face? SelectedFace
     {
         get => _selectedFace;
         set => SetProperty(ref _selectedFace, value);
-    }
-
-    public ObservableCollection<Edge> Edges { get; } = [];
-
-    public Edge? SelectedEdge
-    {
-        get => _selectedEdge;
-        set => SetProperty(ref _selectedEdge, value);
     }
 
     public bool ShowWireFrame
@@ -274,7 +237,8 @@ public sealed class MainViewModel : ObservableObject
 
         _view = view;
 
-        Camera = InitializeCamera();
+        Camera = InitializeModelSpaceCamera();
+        ParametricSpaceCamera = InitializeParametricSpaceCamera();
 
         _flamaFont = new BitmapFont();
         _flamaFont.Load(@"Fonts\Flama.fnt");
@@ -301,13 +265,57 @@ public sealed class MainViewModel : ObservableObject
         // S'abonner aux changements de sélection dans le TreeView
         SelectedTreeItems.CollectionChanged += OnSelectedTreeItemsChanged;
     }
-    
+
+    void AddFaceNormalsNode()
+    {
+        if (_solid == null || _solid.Faces.Count == 0) return;
+
+        var builder = new MeshBuilder();
+        var material = new DiffuseMaterial
+        {
+            DiffuseColor = Color.Orange
+        };
+        foreach (Face face in _solid!.Faces)
+        {
+            Xyz point = face.GetPointOnFace();
+            var p0 = point.ToVector3();
+            double area = face.CalculateArea(0.1);
+            double arrowLength = area / 25;
+            Vector3 p1 = p0 + (face.GetNormal(point) * arrowLength).ToVector3();
+            builder.AddArrow(p0, p1, arrowLength / 8);
+        }
+        _faceNormals = new MeshNode
+        {
+            Geometry = builder.ToMesh()!,
+            Material = material
+        };
+        ModelSpaceRootSceneNode.AddNode(_faceNormals);
+    }
+
+    void OnGeometryChanged()
+    {
+        _faceNormals?.RemoveSelf();
+        if (ShowFaceNormals)
+            AddFaceNormalsNode();
+    }
+
     void OnSelectedTreeItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         ArgumentNullException.ThrowIfNull(e);
-        
+
         // Mettre à jour les visuels de sélection dans la vue 3D
         UpdateSelectionVisuals();
+
+        // Mettre à jour l'affichage de l'espace paramètrique
+        ParametricSpaceRootSceneNode.Clear();
+
+        // Afficher la face sélectionnée dans l'espace paramétrique
+        Face? selectedFace = GetSelectedFaceOrDefault();
+        if (selectedFace != null)
+        {
+            AddFaceToParametricSpace(selectedFace);
+            _view.ParametricSpaceZoomExtents();
+        }
     }
 
     void Zoom1_1()
@@ -318,7 +326,7 @@ public sealed class MainViewModel : ObservableObject
             throw new InvalidOperationException("Can not set zoom for non-orthographic camera.");
     }
 
-    OrthographicCamera InitializeCamera()
+    OrthographicCamera InitializeModelSpaceCamera()
     {
         var lookDirection = new Vector3D(-1, -1, -1);
         lookDirection.Normalize();
@@ -334,9 +342,30 @@ public sealed class MainViewModel : ObservableObject
         return camera;
     }
 
+    static OrthographicCamera InitializeParametricSpaceCamera()
+    {
+        // Vue de dessus (plan XY) — regarder vers le bas selon l'axe Z
+        var camera = new OrthographicCamera
+        {
+            Position = new Point3D(0, 0, 10), // Position au-dessus du plan XY
+            LookDirection = new Vector3D(0, 0, -1), // Regarder vers le bas
+            UpDirection = new Vector3D(0, 1, 0), // Y vers le haut
+            Width = 10, // Largeur initiale
+            NearPlaneDistance = 0.1,
+            FarPlaneDistance = 100
+        };
+        return camera;
+    }
+
     void CameraOnChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(Zoom));
+        
+        // Mettre à jour le niveau de détail des courbes si le zoom a changé
+        if (_solid != null && _curveEdges.Count > 0)
+        {
+            UpdateCurveDetailLevel();
+        }
     }
 
     void CreateVertex()
@@ -348,7 +377,7 @@ public sealed class MainViewModel : ObservableObject
 
         HideParametricSpacePane();
         Update();
-        _view.ZoomExtents();
+        _view.ModelSpaceZoomExtents();
     }
 
     void CreateEdges()
@@ -364,7 +393,7 @@ public sealed class MainViewModel : ObservableObject
         _geometryChanged = true;
         HideParametricSpacePane();
         Update();
-        _view.ZoomExtents();
+        _view.ModelSpaceZoomExtents();
     }
 
     void HideParametricSpacePane()
@@ -375,9 +404,7 @@ public sealed class MainViewModel : ObservableObject
 
     void ShowParametricSpacePane()
     {
-        ParametricSpacePaneColumnWidth = _lastParametricSpacePaneColumnWidth is { IsStar: true, Value: > 0 }
-            ? _lastParametricSpacePaneColumnWidth
-            : new GridLength(1, GridUnitType.Star);
+        ParametricSpacePaneColumnWidth = _lastParametricSpacePaneColumnWidth is { IsStar: true, Value: > 0 } ? _lastParametricSpacePaneColumnWidth : new GridLength(1, GridUnitType.Star);
     }
 
     void CreateFace()
@@ -399,7 +426,7 @@ public sealed class MainViewModel : ObservableObject
         _geometryChanged = true;
         ShowParametricSpacePane();
         Update();
-        _view.ZoomExtents();
+        _view.ModelSpaceZoomExtents();
     }
 
     void CreateBox()
@@ -409,7 +436,7 @@ public sealed class MainViewModel : ObservableObject
         _geometryChanged = true;
         ShowParametricSpacePane();
         Update();
-        _view.ZoomExtents();
+        _view.ModelSpaceZoomExtents();
     }
 
     void CreateSphere()
@@ -419,7 +446,7 @@ public sealed class MainViewModel : ObservableObject
         _geometryChanged = true;
         ShowParametricSpacePane();
         Update();
-        _view.ZoomExtents();
+        _view.ModelSpaceZoomExtents();
     }
 
     void CreateCylinder()
@@ -429,7 +456,7 @@ public sealed class MainViewModel : ObservableObject
 
         ShowParametricSpacePane();
         Update();
-        _view.ZoomExtents();
+        _view.ModelSpaceZoomExtents();
     }
 
     void CreateCone()
@@ -439,7 +466,7 @@ public sealed class MainViewModel : ObservableObject
 
         ShowParametricSpacePane();
         Update();
-        _view.ZoomExtents();
+        _view.ModelSpaceZoomExtents();
     }
 
     void CreateTorus()
@@ -449,7 +476,7 @@ public sealed class MainViewModel : ObservableObject
 
         ShowParametricSpacePane();
         Update();
-        _view.ZoomExtents();
+        _view.ModelSpaceZoomExtents();
     }
 
     void LineLineIntersection()
@@ -481,7 +508,7 @@ public sealed class MainViewModel : ObservableObject
 
         HideParametricSpacePane();
         Update();
-        _view.ZoomExtents();
+        _view.ModelSpaceZoomExtents();
     }
 
     void LinePlaneIntersection()
@@ -512,7 +539,7 @@ public sealed class MainViewModel : ObservableObject
 
         HideParametricSpacePane();
         Update();
-        _view.ZoomExtents();
+        _view.ModelSpaceZoomExtents();
     }
 
     void Update()
@@ -536,13 +563,132 @@ public sealed class MainViewModel : ObservableObject
 
     void UpdateParametricSpace()
     {
-        ReloadFaces();
+        ParametricSpaceRootSceneNode.Clear();
+
+        // Afficher la face sélectionnée dans l'espace paramétrique
+        Face? selectedFace = GetSelectedFaceOrDefault();
+        if (selectedFace != null) AddFaceToParametricSpace(selectedFace);
+        _view.ParametricSpaceZoomExtents();
+    }
+
+    Face? GetSelectedFaceOrDefault()
+    {
+        return SelectedTreeItems.Where(item => item.Data is Face).Select(item => item.Data as Face).FirstOrDefault();
+    }
+
+    void AddFaceToParametricSpace(Face face)
+    {
+        ArgumentNullException.ThrowIfNull(face);
+
+        try
+        {
+            AddFaceContourToParametricSpace(face);
+            if (ShowFaces) AddFaceTriangulationToParametricSpace(face);
+        }
+        catch (NotImplementedException)
+        {
+            // Some surfaces have not yet been implemented for parametric projection
+        }
+    }
+
+    void AddFaceContourToParametricSpace(Face face)
+    {
+        ArgumentNullException.ThrowIfNull(face);
+
+        var mesh = new Mesh(ChordHeightInWorldUnits);
+        List<Node> boundaryNodes = mesh.ProjectFaceBoundaryToParameterSpace(face);
+
+        if (boundaryNodes.Count < 2) return;
+
+        var builder = new LineBuilder();
+        for (int i = 0; i < boundaryNodes.Count; i++)
+        {
+            int nextIndex = (i + 1) % boundaryNodes.Count;
+
+            Uv currentUv = boundaryNodes[i].ParametricSpacePosition;
+            Uv nextUv = boundaryNodes[nextIndex].ParametricSpacePosition;
+
+            builder.AddLine(new Vector3((float)currentUv.U, (float)currentUv.V, 0.001f), new Vector3((float)nextUv.U, (float)nextUv.V, 0.001f));
+        }
+
+        var material = new LineMaterialCore
+        {
+            LineColor = Color.Red
+        };
+
+        var contourNode = new LineNode
+        {
+            Material = material,
+            Geometry = builder.ToLineGeometry3D()!,
+            HitTestThickness = 5,
+            DepthBias = -100
+        };
+
+        ParametricSpaceRootSceneNode.AddNode(contourNode);
+    }
+
+    void AddFaceTriangulationToParametricSpace(Face face)
+    {
+        ArgumentNullException.ThrowIfNull(face);
+
+        // Utiliser la méthode Mesh pour obtenir la triangulation et les nœuds en espace paramétrique
+        var mesh = new Mesh(ChordHeightInWorldUnits);
+        List<Node> boundaryNodes = mesh.ProjectFaceBoundaryToParameterSpace(face);
+
+        if (boundaryNodes.Count < 3) return;
+
+        // Utiliser les utilitaires de triangulation pour obtenir les indices des triangles
+        var adapter = new NodeListAdapter();
+        adapter.Set(boundaryNodes);
+        int[] triangleIndices = TriangulationUtils.EarClipping(adapter);
+
+        if (triangleIndices.Length == 0) return;
+
+        var builder = new LineBuilder();
+
+        // Dessiner les arêtes des triangles en utilisant directement les positions paramétriques
+        for (int i = 0; i < triangleIndices.Length; i += 3)
+        {
+            int i1 = triangleIndices[i];
+            int i2 = triangleIndices[i + 1];
+            int i3 = triangleIndices[i + 2];
+
+            Uv uv1 = boundaryNodes[i1].ParametricSpacePosition;
+            Uv uv2 = boundaryNodes[i2].ParametricSpacePosition;
+            Uv uv3 = boundaryNodes[i3].ParametricSpacePosition;
+
+            Vector3 v1 = new Vector3((float)uv1.U, (float)uv1.V, 0.0f);
+            Vector3 v2 = new Vector3((float)uv2.U, (float)uv2.V, 0.0f);
+            Vector3 v3 = new Vector3((float)uv3.U, (float)uv3.V, 0.0f);
+
+            // Dessiner les 3 arêtes du triangle
+            builder.AddLine(v1, v2);
+            builder.AddLine(v2, v3);
+            builder.AddLine(v3, v1);
+        }
+
+        var material = new LineMaterialCore
+        {
+            LineColor = new Color4(0.7f, 0.7f, 0.7f, 1.0f), // Gris clair explicite
+            Thickness = 1.0f
+        };
+
+        var triangulationNode = new LineNode
+        {
+            Material = material,
+            Geometry = builder.ToLineGeometry3D()!,
+            HitTestThickness = 1
+        };
+
+        ParametricSpaceRootSceneNode.AddNode(triangulationNode);
     }
 
     void UpdateModelSpace()
     {
         ModelSpaceRootSceneNode.Clear();
         _faceNormals = null;
+        _curveLineNode = null;
+        _curveEdges.Clear();
         ParametricSpaceRootSceneNode.Clear();
 
         _modelSpaceLabel = null;
@@ -552,38 +698,19 @@ public sealed class MainViewModel : ObservableObject
         if (ShowFaces) AddFacesToScene();
     }
 
-    void ReloadFaces()
-    {
-        if (_solid == null) return;
-        foreach (Face face in _solid.Faces)
-        {
-            if (!Faces.Contains(face))
-            {
-                int index = _solid.Faces.TakeWhile(f => f.Id < face.Id).Count();
-                Faces.Insert(index, face);
-            }
-        }
-        for (int i = Faces.Count - 1; i >= 0; i--)
-        {
-            if (!_solid.Faces.Contains(Faces[i]))
-                Faces.RemoveAt(i);
-        }
-        SelectedFace = Faces.Count > 0 ? Faces[0] : null;
-    }
-
     void AddVerticesToScene()
     {
         if (_solid == null) throw new NullReferenceException($"{nameof(_solid)} is null.");
 
         var positions = new Vector3Collection(_solid.Vertices.Count);
         var colors = new Color4Collection(_solid.Vertices.Count);
-        
+
         foreach (Vertex vertex in _solid.Vertices)
         {
             positions.Add(new Vector3((float)vertex.Position.X, (float)vertex.Position.Y, (float)vertex.Position.Z));
             colors.Add(IsEntitySelected(vertex) ? Color.Blue : Color4.Black);
         }
-        
+
         var pointGeometry = new PointGeometry3D
         {
             Positions = positions,
@@ -630,17 +757,23 @@ public sealed class MainViewModel : ObservableObject
     {
         if (_solid == null) throw new NullReferenceException($"{nameof(_solid)} is null.");
 
+        var straightLineBuilder = new LineBuilder();
+        var curveLineBuilder = new LineBuilder();
+        var straightEdges = new List<Edge>();
+        var curveEdges = new List<Edge>();
+
         foreach (Edge edge in _solid.Edges)
         {
             if (edge.IsPole) continue;
-            var builder = new LineBuilder();
+
             switch (edge.Curve)
             {
                 case null:
                     {
                         var start = edge.StartVertex.Position.ToVector3();
                         var end = edge.EndVertex.Position.ToVector3();
-                        builder.AddLine(start, end);
+                        straightLineBuilder.AddLine(start, end);
+                        straightEdges.Add(edge);
                         break;
                     }
 
@@ -656,23 +789,99 @@ public sealed class MainViewModel : ObservableObject
                             double endParameter = circle.GetParameterAtPoint(edge.EndVertex.Position);
                             strokePoints = circle.GetStrokePoints(ChordHeightInWorldUnits, startParameter, endParameter);
                         }
-                        builder.Add(isClosed: isFullCircle, strokePoints.Select(p => p.ToVector3()).ToArray());
+                        curveLineBuilder.Add(isClosed: isFullCircle, strokePoints.Select(p => p.ToVector3()).ToArray());
+                        curveEdges.Add(edge);
                         break;
                     }
             }
-            var material = new LineMaterialCore
+        }
+
+        // Créer le LineNode pour les lignes droites
+        if (straightEdges.Count > 0)
+        {
+            var straightLineMaterial = new LineMaterialCore
             {
-                LineColor = IsEntitySelected(edge) ? Color.Blue : Color.Gray
+                LineColor = Color.Gray
             };
-            var node = new LineNode
+            var straightLineNode = new LineNode
             {
-                Material = material,
-                Geometry = builder.ToLineGeometry3D()!,
+                Material = straightLineMaterial,
+                Geometry = straightLineBuilder.ToLineGeometry3D()!,
                 HitTestThickness = 5
             };
-            edge.Tag = node;
-            ModelSpaceRootSceneNode.AddNode(node);
+            
+            // Associer le node aux edges pour la sélection
+            foreach (Edge edge in straightEdges)
+            {
+                edge.Tag = straightLineNode;
+            }
+            
+            ModelSpaceRootSceneNode.AddNode(straightLineNode);
         }
+
+        // Créer le LineNode pour les courbes
+        if (curveEdges.Count > 0)
+        {
+            var curveLineMaterial = new LineMaterialCore
+            {
+                LineColor = Color.Gray
+            };
+            _curveLineNode = new LineNode
+            {
+                Material = curveLineMaterial,
+                Geometry = curveLineBuilder.ToLineGeometry3D()!,
+                HitTestThickness = 5
+            };
+            
+            // Stocker la liste des courbes pour les mises à jour de niveau de détail
+            _curveEdges.Clear();
+            _curveEdges.AddRange(curveEdges);
+            
+            // Associer le node aux edges pour la sélection
+            foreach (Edge edge in curveEdges)
+            {
+                edge.Tag = _curveLineNode;
+            }
+            
+            ModelSpaceRootSceneNode.AddNode(_curveLineNode);
+        }
+        else
+        {
+            _curveLineNode = null;
+            _curveEdges.Clear();
+        }
+    }
+
+    void UpdateCurveDetailLevel()
+    {
+        if (_curveLineNode == null || _curveEdges.Count == 0) return;
+
+        var curveLineBuilder = new LineBuilder();
+
+        foreach (Edge edge in _curveEdges)
+        {
+            switch (edge.Curve)
+            {
+                case Circle circle:
+                    {
+                        bool isFullCircle = edge.StartVertex.Position.IsAlmostEqualTo(edge.EndVertex.Position);
+                        IList<Xyz> strokePoints;
+                        if (isFullCircle)
+                            strokePoints = circle.GetStrokePoints(ChordHeightInWorldUnits);
+                        else
+                        {
+                            double startParameter = circle.GetParameterAtPoint(edge.StartVertex.Position);
+                            double endParameter = circle.GetParameterAtPoint(edge.EndVertex.Position);
+                            strokePoints = circle.GetStrokePoints(ChordHeightInWorldUnits, startParameter, endParameter);
+                        }
+                        curveLineBuilder.Add(isClosed: isFullCircle, strokePoints.Select(p => p.ToVector3()).ToArray());
+                        break;
+                    }
+            }
+        }
+
+        // Mettre à jour uniquement la géométrie du LineNode existant
+        _curveLineNode.Geometry = curveLineBuilder.ToLineGeometry3D()!;
     }
 
     void AddFacesToScene()
@@ -726,10 +935,10 @@ public sealed class MainViewModel : ObservableObject
     {
         // Sauvegarder les entités sélectionnées
         var selectedEntities = SelectedTreeItems.Select(item => item.Data).ToHashSet();
-        
+
         ModelTreeItems.Clear();
-        
-        if (_solid == null) 
+
+        if (_solid == null)
         {
             // Si pas de solide, vider aussi les sélections
             SelectedTreeItems.Clear();
@@ -750,7 +959,7 @@ public sealed class MainViewModel : ObservableObject
             {
                 var vertexItem = new ModelTreeItem($"Vertex {vertex.Id}: {vertex.Position}", vertex);
                 verticesItem.Children.Add(vertexItem);
-                
+
                 // Si cette entité était sélectionnée, l'ajouter à la nouvelle liste
                 if (selectedEntities.Contains(vertex))
                 {
@@ -771,9 +980,7 @@ public sealed class MainViewModel : ObservableObject
                 switch (edge.Curve)
                 {
                     case null:
-                        edgeDescription = edge.IsPole
-                            ? $"Pole: {edge.StartVertex.Position}"
-                            : $"Line: {edge.StartVertex.Position} → {edge.EndVertex.Position}";
+                        edgeDescription = edge.IsPole ? $"Pole: {edge.StartVertex.Position}" : $"Line: {edge.StartVertex.Position} → {edge.EndVertex.Position}";
                         break;
 
                     case Circle circle:
@@ -788,7 +995,7 @@ public sealed class MainViewModel : ObservableObject
                     edgeDescription += " (seam)";
                 var edgeItem = new ModelTreeItem($"Edge {edge.Id}: {edgeDescription}", edge);
                 edgesItem.Children.Add(edgeItem);
-                
+
                 // Si cette entité était sélectionnée, l'ajouter à la nouvelle liste
                 if (selectedEntities.Contains(edge))
                 {
@@ -808,7 +1015,7 @@ public sealed class MainViewModel : ObservableObject
                 string surfaceDescription = face.Surface.GetType().Name;
                 var faceItem = new ModelTreeItem($"Face {face.Id}: {surfaceDescription}", face);
                 facesItem.Children.Add(faceItem);
-                
+
                 // Si cette entité était sélectionnée, l'ajouter à la nouvelle liste
                 if (selectedEntities.Contains(face))
                 {
@@ -817,11 +1024,11 @@ public sealed class MainViewModel : ObservableObject
                 }
             }
         }
-        
+
         // Synchroniser SelectedTreeItems avec newSelectedItems
         SynchronizeSelectedItems(newSelectedItems);
     }
-    
+
     void SynchronizeSelectedItems(List<ModelTreeItem> newSelectedItems)
     {
         // Supprimer les éléments qui ne sont plus sélectionnés
@@ -832,7 +1039,7 @@ public sealed class MainViewModel : ObservableObject
                 SelectedTreeItems.RemoveAt(i);
             }
         }
-        
+
         // Ajouter les nouveaux éléments sélectionnés
         foreach (ModelTreeItem newItem in newSelectedItems)
         {
@@ -841,7 +1048,7 @@ public sealed class MainViewModel : ObservableObject
                 SelectedTreeItems.Add(newItem);
             }
         }
-        
+
         // Mettre à jour les visuels après la synchronisation
         UpdateSelectionVisuals();
     }
@@ -858,7 +1065,7 @@ public sealed class MainViewModel : ObservableObject
 
     void SelectEntityAt3D(System.Windows.Point? mousePosition)
     {
-        if (mousePosition == null || _solid == null) 
+        if (mousePosition == null || _solid == null)
         {
             ClearAllSelections();
             return;
@@ -866,7 +1073,7 @@ public sealed class MainViewModel : ObservableObject
 
         // Perform hit testing on the 3D viewport
         IList<HitTestResult>? hits = _view.HitTest(mousePosition.Value);
-        if (hits.Count == 0) 
+        if (hits.Count == 0)
         {
             ClearAllSelections();
             return;
@@ -930,13 +1137,13 @@ public sealed class MainViewModel : ObservableObject
         {
             // Add the new item to selection
             SelectedTreeItems.Add(itemToSelect);
-            
+
             // Update visual selection in the tree
             itemToSelect.IsSelected = true;
-            
+
             // Expand parent nodes to make the selected item visible
             _view.ExpandParentNodesForSelectedItem(itemToSelect);
-            
+
             // Force update of visual selection in 3D view
             UpdateSelectionVisuals();
         }
@@ -1022,7 +1229,7 @@ public sealed class MainViewModel : ObservableObject
     {
         if (_solid == null || !ShowFaces) return;
 
-       foreach (Face face in _solid.Faces)
+        foreach (Face face in _solid.Faces)
         {
             if (((MaterialGeometryNode)face.Tag!).Material is DiffuseMaterialCore material)
             {

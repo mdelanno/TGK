@@ -8,9 +8,9 @@ namespace TGK.Viewer.Views;
 
 public sealed partial class MainWindow : IView
 {
-    public double ViewportWidth => viewport3Dx!.ActualWidth;
+    public double ViewportWidth => modelSpaceViewport!.ActualWidth;
 
-    public double ViewportHeight => viewport3Dx!.ActualHeight;
+    public double ViewportHeight => modelSpaceViewport!.ActualHeight;
 
     public MainWindow()
     {
@@ -20,14 +20,19 @@ public sealed partial class MainWindow : IView
         DataContext = viewModel;
     }
 
-    public void ZoomExtents()
+    public void ModelSpaceZoomExtents()
     {
-        viewport3Dx!.ZoomExtents();
+        modelSpaceViewport!.ZoomExtents();
+    }
+
+    public void ParametricSpaceZoomExtents()
+    {
+        parametricSpaceViewport!.ZoomExtents();
     }
 
     public IList<HitTestResult>? HitTest(Point position)
     {
-        return viewport3Dx!.FindHits(position);
+        return modelSpaceViewport!.FindHits(position);
     }
 
     public void ExpandParentNodesForSelectedItem(ModelTreeItem modelTreeItem)
@@ -42,7 +47,7 @@ public sealed partial class MainWindow : IView
         // Only handle left clicks for selection
         if (e.ChangedButton == MouseButton.Left)
         {
-            Point position = e.GetPosition(viewport3Dx!);
+            Point position = e.GetPosition(modelSpaceViewport!);
             
             if (DataContext is MainViewModel viewModel)
             {
