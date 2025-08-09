@@ -6,6 +6,7 @@ using HelixToolkit.SharpDX.Core.Model.Scene;
 using HelixToolkit.Wpf.SharpDX;
 using SharpDX;
 using SharpDX.Direct3D11;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Media.Media3D;
 using TGK.FaceterServices;
@@ -24,8 +25,16 @@ using PointFigure = HelixToolkit.SharpDX.Core.PointFigure;
 
 namespace TGK.Viewer.ViewModels;
 
+public sealed record EdgeData(SceneNode Node, int StartIndex, int EndIndex);
+
 public sealed class MainViewModel : ObservableObject
 {
+    static readonly Color _selectedEntitiesColor = Color.Blue;
+
+    static readonly Color4 _vertexColor = Color4.Black;
+
+    static readonly Color _edgesColor = Color.Gray;
+
     const double CURVE_UPDATE_THROTTLE_SECONDS = 1.0;
 
     readonly BitmapFont _flamaFont;
@@ -64,11 +73,15 @@ public sealed class MainViewModel : ObservableObject
 
     bool _showWireFrame;
 
+    string _selectionStatus = "";
+
     MeshNode? _faceNormals;
 
     bool _geometryChanged;
 
     LineNode? _curveLineNode;
+
+    LineNode? _straightLineNode;
 
     readonly List<Edge> _curveEdges = [];
 
@@ -183,7 +196,7 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    public RelayCommand Zoom1_1Command { get; }
+    public RelayCommand Zoom11Command { get; }
 
     /// <summary>
     /// Chord height in screen pixels.
@@ -233,6 +246,12 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    public string SelectionStatus
+    {
+        get => _selectionStatus;
+        set => SetProperty(ref _selectionStatus, value);
+    }
+
     public MainViewModel(IView view, ISelectionService selectionService)
     {
         ArgumentNullException.ThrowIfNull(view);
@@ -261,7 +280,7 @@ public sealed class MainViewModel : ObservableObject
         LineLineIntersectionCommand = new RelayCommand(LineLineIntersection);
         LinePlaneIntersectionCommand = new RelayCommand(LinePlaneIntersection);
 
-        Zoom1_1Command = new RelayCommand(Zoom1_1);
+        Zoom11Command = new RelayCommand(Zoom1_1);
 
         CloseParametricSpacePaneCommand = new RelayCommand(HideParametricSpacePane);
         ClearSelectionCommand = new RelayCommand(() => ModelTree.ClearSelectionCommand.Execute(null));
@@ -308,6 +327,7 @@ public sealed class MainViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(entities);
 
+        UpdateSelectionStatus(entities);
         UpdateSelectionVisuals();
         ParametricSpaceRootSceneNode.Clear();
         Face? selectedFace = entities.OfType<Face>().FirstOrDefault();
@@ -362,7 +382,7 @@ public sealed class MainViewModel : ObservableObject
         if (Camera is not OrthographicCamera orthographicCamera)
             return;
 
-        var boundingBox = _view.CalculateModelSpaceBoundingBox();
+        BoundingBox boundingBox = _view.CalculateModelSpaceBoundingBox();
 
         if (boundingBox.Size.Length() == 0.0)
         {
@@ -375,10 +395,10 @@ public sealed class MainViewModel : ObservableObject
         // Simple conservative approach: use model center and size
         var modelCenter = new Xyz(boundingBox.Center.X, boundingBox.Center.Y, boundingBox.Center.Z);
         var cameraPosition = new Xyz(orthographicCamera.Position.X, orthographicCamera.Position.Y, orthographicCamera.Position.Z);
-        var lookDirection = new Xyz(orthographicCamera.LookDirection.X, orthographicCamera.LookDirection.Y, orthographicCamera.LookDirection.Z).ToUnit();
+        Xyz lookDirection = new Xyz(orthographicCamera.LookDirection.X, orthographicCamera.LookDirection.Y, orthographicCamera.LookDirection.Z).ToUnit();
 
         // Distance from camera to model center along view direction
-        var vectorToCenter = modelCenter - cameraPosition;
+        Xyz vectorToCenter = modelCenter - cameraPosition;
         double centerDistance = vectorToCenter.DotProduct(lookDirection);
 
         // Use very conservative margins: model size on each side plus extra safety
@@ -694,9 +714,9 @@ public sealed class MainViewModel : ObservableObject
             Uv uv2 = boundaryNodes[i2].ParametricSpacePosition;
             Uv uv3 = boundaryNodes[i3].ParametricSpacePosition;
 
-            Vector3 v1 = new Vector3((float)uv1.U, (float)uv1.V, 0.0f);
-            Vector3 v2 = new Vector3((float)uv2.U, (float)uv2.V, 0.0f);
-            Vector3 v3 = new Vector3((float)uv3.U, (float)uv3.V, 0.0f);
+            var v1 = new Vector3((float)uv1.U, (float)uv1.V, 0.0f);
+            var v2 = new Vector3((float)uv2.U, (float)uv2.V, 0.0f);
+            var v3 = new Vector3((float)uv3.U, (float)uv3.V, 0.0f);
 
             // Dessiner les 3 arêtes du triangle
             builder.AddLine(v1, v2);
@@ -725,12 +745,14 @@ public sealed class MainViewModel : ObservableObject
         ModelSpaceRootSceneNode.Clear();
         _faceNormals = null;
         _curveLineNode = null;
+        _straightLineNode = null;
         _curveEdges.Clear();
         _lastZoom = Zoom; // Réinitialiser le zoom de référence après reconstruction
         _lastCurveUpdateTime = DateTime.MinValue; // Permettre immédiatement la prochaine mise à jour des courbes
         ParametricSpaceRootSceneNode.Clear();
 
         _modelSpaceLabel = null;
+        if (_solid == null) return;
         if (ShowVerticesNames) AddNamesToScene();
         if (ShowVertices) AddVerticesToScene();
         if (ShowEdges) AddEdgesToScene();
@@ -747,7 +769,7 @@ public sealed class MainViewModel : ObservableObject
         foreach (Vertex vertex in _solid.Vertices)
         {
             positions.Add(new Vector3((float)vertex.Position.X, (float)vertex.Position.Y, (float)vertex.Position.Z));
-            colors.Add(IsEntitySelected(vertex) ? Color.Blue : Color4.Black);
+            colors.Add(IsEntitySelected(vertex) ? _selectedEntitiesColor : _vertexColor);
         }
 
         var pointGeometry = new PointGeometry3D
@@ -801,6 +823,8 @@ public sealed class MainViewModel : ObservableObject
         var straightEdges = new List<Edge>();
         var curveEdges = new List<Edge>();
 
+        var straightEdgeColors = new Color4Collection();
+        var curveEdgeColors = new Color4Collection();
         foreach (Edge edge in _solid.Edges)
         {
             if (edge.IsPole) continue;
@@ -811,6 +835,9 @@ public sealed class MainViewModel : ObservableObject
                     {
                         var start = edge.StartVertex.Position.ToVector3();
                         var end = edge.EndVertex.Position.ToVector3();
+                        Color edgeColor = IsEntitySelected(edge) ? _selectedEntitiesColor : _edgesColor;
+                        straightEdgeColors.Add(edgeColor);
+                        straightEdgeColors.Add(edgeColor);
                         straightLineBuilder.AddLine(start, end);
                         straightEdges.Add(edge);
                         break;
@@ -828,60 +855,72 @@ public sealed class MainViewModel : ObservableObject
                             double endParameter = circle.GetParameterAtPoint(edge.EndVertex.Position);
                             strokePoints = circle.GetStrokePoints(ChordHeightInWorldUnits, startParameter, endParameter);
                         }
-                        curveLineBuilder.Add(isClosed: isFullCircle, strokePoints.Select(p => p.ToVector3()).ToArray());
+                        Color edgeColor = IsEntitySelected(edge) ? _selectedEntitiesColor : _edgesColor;
+                        Vector3[] points = strokePoints.Select(p => p.ToVector3()).ToArray();
+                        for (int i = 0; i < points.Length * 2; i++) curveEdgeColors.Add(edgeColor);
+                        curveLineBuilder.Add(isClosed: isFullCircle, points);
                         curveEdges.Add(edge);
                         break;
                     }
             }
         }
 
-        // Créer le LineNode pour les lignes droites
         if (straightEdges.Count > 0)
         {
-            var straightLineMaterial = new LineMaterialCore
-            {
-                LineColor = Color.Gray
-            };
-            var straightLineNode = new LineNode
+            var straightLineMaterial = new LineMaterialCore { LineColor = Color4.White };
+            _straightLineNode = new LineNode
             {
                 Material = straightLineMaterial,
                 Geometry = straightLineBuilder.ToLineGeometry3D()!,
                 HitTestThickness = 5
             };
-
-            // Associer le node aux edges pour la sélection
-            foreach (Edge edge in straightEdges)
+            _straightLineNode.Geometry.Colors = straightEdgeColors;
+            for (int i = 0; i < straightEdges.Count; i++)
             {
-                edge.Tag = straightLineNode;
+                Edge edge = straightEdges[i];
+                int startIndex = i * 2;
+                int endIndex = i * 2 + 1;
+                edge.Tag = new EdgeData(_straightLineNode, startIndex, endIndex);
             }
 
-            ModelSpaceRootSceneNode.AddNode(straightLineNode);
+            ModelSpaceRootSceneNode.AddNode(_straightLineNode);
+        }
+        else
+        {
+            _straightLineNode = null;
         }
 
-        // Créer le LineNode pour les courbes
         if (curveEdges.Count > 0)
         {
-            var curveLineMaterial = new LineMaterialCore
-            {
-                LineColor = Color.Gray
-            };
+            var curveLineMaterial = new LineMaterialCore { LineColor = Color4.White };
             _curveLineNode = new LineNode
             {
                 Material = curveLineMaterial,
                 Geometry = curveLineBuilder.ToLineGeometry3D()!,
                 HitTestThickness = 5
             };
-
-            // Stocker la liste des courbes pour les mises à jour de niveau de détail
+            Debug.Assert(curveEdgeColors.Count == _curveLineNode.Geometry.Indices!.Count, "Number of colors does not match number of indices.");
+            _curveLineNode.Geometry.Colors = curveEdgeColors;
             _curveEdges.Clear();
             _curveEdges.AddRange(curveEdges);
-
-            // Associer le node aux edges pour la sélection
+            
+            // Associate EdgeData with each curve edge including index range
+            int startIndex = 0;
             foreach (Edge edge in curveEdges)
             {
-                edge.Tag = _curveLineNode;
+                int pointCount = 0;
+                if (edge.Curve is Circle circle)
+                {
+                    bool isFullCircle = edge.StartVertex.Position.IsAlmostEqualTo(edge.EndVertex.Position);
+                    IList<Xyz> strokePoints = isFullCircle
+                        ? circle.GetStrokePoints(ChordHeightInWorldUnits)
+                        : circle.GetStrokePoints(ChordHeightInWorldUnits, circle.GetParameterAtPoint(edge.StartVertex.Position), circle.GetParameterAtPoint(edge.EndVertex.Position));
+                    pointCount = strokePoints.Count;
+                }
+                int endIndex = startIndex + pointCount * 2 - 1;
+                edge.Tag = new EdgeData(_curveLineNode, startIndex, endIndex);
+                startIndex = endIndex + 1;
             }
-
             ModelSpaceRootSceneNode.AddNode(_curveLineNode);
         }
         else
@@ -896,7 +935,9 @@ public sealed class MainViewModel : ObservableObject
         if (_curveLineNode == null || _curveEdges.Count == 0) return;
 
         var curveLineBuilder = new LineBuilder();
-
+        var colors = new Color4Collection(_curveEdges.Count * 2);
+        int startIndex = 0;
+        
         foreach (Edge edge in _curveEdges)
         {
             switch (edge.Curve)
@@ -913,14 +954,24 @@ public sealed class MainViewModel : ObservableObject
                             double endParameter = circle.GetParameterAtPoint(edge.EndVertex.Position);
                             strokePoints = circle.GetStrokePoints(ChordHeightInWorldUnits, startParameter, endParameter);
                         }
-                        curveLineBuilder.Add(isClosed: isFullCircle, strokePoints.Select(p => p.ToVector3()).ToArray());
+                        Color edgeColor = IsEntitySelected(edge) ? _selectedEntitiesColor : _edgesColor;
+                        Vector3[] points = strokePoints.Select(p => p.ToVector3()).ToArray();
+                        for (int i = 0; i < points.Length * 2; i++) colors.Add(edgeColor);
+                        curveLineBuilder.Add(isClosed: isFullCircle, points);
+                        
+                        int endIndex = startIndex + strokePoints.Count * 2 - 1;
+                        edge.Tag = new EdgeData(_curveLineNode, startIndex, endIndex);
+                        startIndex = endIndex + 1;
                         break;
                     }
             }
         }
 
-        // Mettre à jour uniquement la géométrie du LineNode existant
         _curveLineNode.Geometry = curveLineBuilder.ToLineGeometry3D()!;
+
+        Debug.Assert(colors.Count == _curveLineNode.Geometry.Indices!.Count, "Number of colors does not match number of indices.");
+        _curveLineNode.Geometry.Colors = colors;
+        _curveLineNode.Geometry.UpdateColors();
     }
 
     void AddFacesToScene()
@@ -939,7 +990,7 @@ public sealed class MainViewModel : ObservableObject
             builder.Normals!.AddRange(mesh.Normals.Select(n => n.ToVector3()));
             var material = new DiffuseMaterial
             {
-                DiffuseColor = IsEntitySelected(face) ? Color.Blue : Color.LightBlue
+                DiffuseColor = IsEntitySelected(face) ? _selectedEntitiesColor : Color.LightBlue
             };
             var node = new MeshNode
             {
@@ -970,7 +1021,6 @@ public sealed class MainViewModel : ObservableObject
         ModelSpaceRootSceneNode.AddNode(billboardNode);
     }
 
-
     void SelectEntityAt3D(System.Windows.Point? mousePosition)
     {
         if (mousePosition == null || _solid == null)
@@ -995,7 +1045,7 @@ public sealed class MainViewModel : ObservableObject
                 if (tgkEntity != null)
                 {
                     ModelTree.SelectEntity(tgkEntity);
-                    var treeItem = ModelTree.FindItem(tgkEntity);
+                    ModelTreeItem? treeItem = ModelTree.FindItem(tgkEntity);
                     if (treeItem != null)
                         _view.ExpandParentNodesForSelectedItem(treeItem);
                     entityFound = true;
@@ -1017,7 +1067,7 @@ public sealed class MainViewModel : ObservableObject
 
         foreach (Edge edge in _solid.Edges)
         {
-            if (edge.Tag == node) return edge;
+            if (edge.Tag is EdgeData edgeData && edgeData.Node == node) return edge;
         }
 
         foreach (Face face in _solid.Faces)
@@ -1033,6 +1083,33 @@ public sealed class MainViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(entity);
 
         return _selectionService.SelectedEntities.Contains(entity);
+    }
+
+    void UpdateSelectionStatus(IEnumerable<BRepEntity> entities)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        if (!entities.Any())
+        {
+            SelectionStatus = "";
+            return;
+        }
+
+        var parts = new List<string>();
+
+        IEnumerable<Vertex> vertices = entities.OfType<Vertex>();
+        int verticesCount = vertices.Count();
+        if (verticesCount > 0) parts.Add(verticesCount == 1 ? "One vertex selected" : $"{verticesCount} vertices selected");
+
+        IEnumerable<Edge> edges = entities.OfType<Edge>();
+        int edgesCount = edges.Count();
+        if (edgesCount > 0) parts.Add(edgesCount == 1 ? "One edge selected" : $"{edgesCount} edges selected");
+
+        IEnumerable<Face> faces = entities.OfType<Face>();
+        int facesCount = faces.Count();
+        if (facesCount > 0) parts.Add(facesCount == 1 ? "One face selected" : $"{facesCount} faces selected");
+
+        SelectionStatus = string.Join(", ", parts);
     }
 
     void UpdateSelectionVisuals()
@@ -1053,7 +1130,7 @@ public sealed class MainViewModel : ObservableObject
         var geometry = (PointGeometry3D)pointNode.Geometry!;
         foreach ((Vertex vertex, int i) in _solid.Vertices.Select((vertex, index) => (vertex, index)))
         {
-            geometry.Colors![i] = IsEntitySelected(vertex) ? Color.Blue : Color4.Black;
+            geometry.Colors![i] = IsEntitySelected(vertex) ? _selectedEntitiesColor : _vertexColor;
         }
         geometry.UpdateColors();
     }
@@ -1064,11 +1141,43 @@ public sealed class MainViewModel : ObservableObject
 
         foreach (Edge edge in _solid.Edges)
         {
-            if (edge.IsPole) continue;
-            if (((MaterialGeometryNode)edge.Tag!).Material is LineMaterialCore material)
+            var edgeData = (EdgeData?)edge.Tag;
+            if (edgeData == null) throw new NullReferenceException($"{nameof(edgeData)} is null.");
+            Debug.WriteLine($"Edge: {edge}, StartIndex: {edgeData.StartIndex}, EndIndex: {edgeData.EndIndex}, Selected: {IsEntitySelected(edge)}");
+            var lineGeometry = (LineGeometry3D)((LineNode)edgeData.Node).Geometry!;
+            Color4Collection? colors = lineGeometry.Colors;
+            if (colors == null) throw new NullReferenceException($"{nameof(colors)} is null.");
+            Color color = IsEntitySelected(edge) ? _selectedEntitiesColor : _edgesColor;
+            for (int i = edgeData.StartIndex; i <= edgeData.EndIndex; i++) colors[i] = color;
+        }
+        _straightLineNode?.Geometry?.UpdateColors();
+
+        ShowCurveEdgeColors();
+        _curveLineNode?.Geometry?.UpdateColors();
+    }
+
+    [Conditional("DEBUG")]
+    void ShowCurveEdgeColors()
+    {
+        if (_curveLineNode?.Geometry is LineGeometry3D { Colors: not null } curveGeometry)
+        {
+            var colorRanges = new List<string>();
+            Color4 currentColor = curveGeometry.Colors[0];
+            int rangeStart = 0;
+
+            for (int i = 1; i < curveGeometry.Colors.Count; i++)
             {
-                material.LineColor = IsEntitySelected(edge) ? Color.Blue : Color.Gray;
+                if (!curveGeometry.Colors[i].Equals(currentColor))
+                {
+                    string colorName = currentColor.Equals(_selectedEntitiesColor) ? "blue" : "gray";
+                    colorRanges.Add($"({rangeStart}-{i - 1}, {colorName})");
+                    currentColor = curveGeometry.Colors[i];
+                    rangeStart = i;
+                }
             }
+            string lastColorName = currentColor.Equals(_selectedEntitiesColor) ? "blue" : "gray";
+            colorRanges.Add($"({rangeStart}-{curveGeometry.Colors.Count - 1}, {lastColorName})");
+            Debug.WriteLine($"Curve edges colors: {string.Join(",", colorRanges)}");
         }
     }
 
@@ -1080,7 +1189,7 @@ public sealed class MainViewModel : ObservableObject
         {
             if (((MaterialGeometryNode)face.Tag!).Material is DiffuseMaterialCore material)
             {
-                material.DiffuseColor = IsEntitySelected(face) ? Color.Blue : Color.LightBlue;
+                material.DiffuseColor = IsEntitySelected(face) ? _selectedEntitiesColor : Color.LightBlue;
             }
         }
     }
