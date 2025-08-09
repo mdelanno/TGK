@@ -857,7 +857,7 @@ public sealed class MainViewModel : ObservableObject
                         }
                         Color edgeColor = IsEntitySelected(edge) ? _selectedEntitiesColor : _edgesColor;
                         Vector3[] points = strokePoints.Select(p => p.ToVector3()).ToArray();
-                        for (int i = 0; i < points.Length * 2; i++) curveEdgeColors.Add(edgeColor);
+                        for (int i = 0; i < points.Length; i++) curveEdgeColors.Add(edgeColor);
                         curveLineBuilder.Add(isClosed: isFullCircle, points);
                         curveEdges.Add(edge);
                         break;
@@ -899,7 +899,7 @@ public sealed class MainViewModel : ObservableObject
                 Geometry = curveLineBuilder.ToLineGeometry3D()!,
                 HitTestThickness = 5
             };
-            Debug.Assert(curveEdgeColors.Count == _curveLineNode.Geometry.Indices!.Count, "Number of colors does not match number of indices.");
+            Debug.Assert(curveEdgeColors.Count == _curveLineNode.Geometry.Positions!.Count, "Number of colors does not match number of positions.");
             _curveLineNode.Geometry.Colors = curveEdgeColors;
             _curveEdges.Clear();
             _curveEdges.AddRange(curveEdges);
@@ -956,10 +956,10 @@ public sealed class MainViewModel : ObservableObject
                         }
                         Color edgeColor = IsEntitySelected(edge) ? _selectedEntitiesColor : _edgesColor;
                         Vector3[] points = strokePoints.Select(p => p.ToVector3()).ToArray();
-                        for (int i = 0; i < points.Length * 2; i++) colors.Add(edgeColor);
+                        for (int i = 0; i < strokePoints.Count; i++) colors.Add(edgeColor);
                         curveLineBuilder.Add(isClosed: isFullCircle, points);
                         
-                        int endIndex = startIndex + strokePoints.Count * 2 - 1;
+                        int endIndex = startIndex + strokePoints.Count - 1;
                         edge.Tag = new EdgeData(_curveLineNode, startIndex, endIndex);
                         startIndex = endIndex + 1;
                         break;
@@ -969,7 +969,7 @@ public sealed class MainViewModel : ObservableObject
 
         _curveLineNode.Geometry = curveLineBuilder.ToLineGeometry3D()!;
 
-        Debug.Assert(colors.Count == _curveLineNode.Geometry.Indices!.Count, "Number of colors does not match number of indices.");
+        Debug.Assert(colors.Count == _curveLineNode.Geometry.Positions!.Count, "Number of colors does not match number of positions.");
         _curveLineNode.Geometry.Colors = colors;
         _curveLineNode.Geometry.UpdateColors();
     }
